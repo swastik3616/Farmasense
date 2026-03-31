@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import AdminLogin from "./pages/admin/AdminLogin";
 import Dashboard from "./pages/admin/Dashboard";
+import Farmers from "./pages/admin/Farmers";
+import Advisories from "./pages/admin/Advisories";
 
 function ProtectedRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -21,6 +23,16 @@ function App() {
           <Route path="/admin/dashboard" element={
             <ProtectedRoute role="admin">
               <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/farmers" element={
+            <ProtectedRoute role="admin">
+              <Farmers />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/advisories" element={
+            <ProtectedRoute role="admin">
+              <Advisories />
             </ProtectedRoute>
           } />
         </Routes>

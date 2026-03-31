@@ -90,10 +90,10 @@ export default function Dashboard() {
                                         return (
                                             <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", border: "0.5px solid #f0f0f0", borderRadius: 8 }}>
                                                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#EBF2FD", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 500, color: "#185FA5", flexShrink: 0 }}>
-                                                    #{a.farm_id}
+                                                    #{String(a.farm_id).slice(-4)}
                                                 </div>
                                                 <div style={{ flex: 1 }}>
-                                                    <div style={{ fontSize: 12, fontWeight: 500, color: "#1a1a1a" }}>Farm #{a.farm_id}</div>
+                                                    <div style={{ fontSize: 12, fontWeight: 500, color: "#1a1a1a" }}>Farm #{String(a.farm_id).slice(-4)}</div>
                                                     <div style={{ fontSize: 11, color: "#888", marginTop: 1 }}>{a.season} season · {new Date(a.created_at).toLocaleString()}</div>
                                                 </div>
                                                 {a.recommended_crop && (
