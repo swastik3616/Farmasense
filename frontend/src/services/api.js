@@ -24,6 +24,7 @@ export const adminLogin = (data) => API.post("/admin/login", data);
 export const getAnalytics = () => API.get("/admin/analytics");
 export const getFarmers = () => API.get("/admin/farmers");
 export const getAdvisories = () => API.get("/admin/advisories");
+export const getAllAlerts = () => API.get("/admin/alerts");
 
 // Farmer Auth
 export const sendOtp = (mobile) => API.post("/auth/send-otp", { mobile_number: mobile });

@@ -4,6 +4,8 @@ import AdminLogin from "./pages/admin/AdminLogin";
 import Dashboard from "./pages/admin/Dashboard";
 import Farmers from "./pages/admin/Farmers";
 import Advisories from "./pages/admin/Advisories";
+import Alerts from "./pages/admin/Alerts";
+import Analytics from "./pages/admin/Analytics";
 
 function ProtectedRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -33,6 +35,16 @@ function App() {
           <Route path="/admin/advisories" element={
             <ProtectedRoute role="admin">
               <Advisories />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/alerts" element={
+            <ProtectedRoute role="admin">
+              <Alerts />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/analytics" element={
+            <ProtectedRoute role="admin">
+              <Analytics />
             </ProtectedRoute>
           } />
         </Routes>

@@ -98,6 +98,29 @@ def get_advisories():
     return jsonify(result), 200
 
 
+
+@admin_bp.route("/alerts", methods=["GET"])
+@jwt_required()
+def get_alerts():
+    alerts_col = current_app.db["alerts"]
+    
+    alerts = list(alerts_col.find().sort("created_at", -1).limit(50))
+    result = []
+    
+    for a in alerts:
+        result.append({
+            "id"        : str(a["_id"]),
+            "farm_id"   : str(a.get("farm_id")),
+            "alert_type": a.get("alert_type"),
+            "severity"  : a.get("severity"),
+            "message"   : a.get("message"),
+            "sent_via"  : a.get("sent_via"),
+            "created_at": str(a.get("created_at", "N/A")),
+        })
+
+    return jsonify(result), 200
+
+
 @admin_bp.route("/analytics", methods=["GET"])
 @jwt_required()
 def get_analytics():
