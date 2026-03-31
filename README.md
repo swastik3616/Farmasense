@@ -24,7 +24,6 @@ FarmaSense is an intelligent agricultural platform designed to assist farmers an
 - **Framework:** Python, Flask
 - **Databases:** 
   - Relational: SQL (PyODBC, SQLAlchemy)
-  - NoSQL: MongoDB (PyMongo)
   - Key-Value / Caching: Redis
 - **Authentication:** Flask-JWT-Extended
 - **AI Integration:** LangChain, LangGraph, Google Generative AI, Langchain-Groq
@@ -62,7 +61,7 @@ Ensure you have the following installed on your machine:
 - Node.js (v16+)
 - Python (v3.9+)
 - Redis Server
-- MongoDB Server
+- T-SQL Server
 
 ### Setting up the Backend
 
