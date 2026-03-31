@@ -1,13 +1,11 @@
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
-from flask_sqlalchemy import SQLAlchemy
 from pymongo import MongoClient
 
 from config import Config
 
-db           = SQLAlchemy()
-jwt          = JWTManager()
+jwt = JWTManager()
 mongo_client = None
 
 def create_app():
@@ -15,11 +13,13 @@ def create_app():
     app.config.from_object(Config)
 
     CORS(app)
-    db.init_app(app)
     jwt.init_app(app)
 
     global mongo_client
     mongo_client = MongoClient(app.config["MONGO_URI"])
+
+    # OPTIONAL: attach DB to app
+    app.db = mongo_client["farmsense"]
 
     from app.routes.auth     import auth_bp
     from app.routes.farm     import farm_bp
@@ -34,8 +34,5 @@ def create_app():
     app.register_blueprint(market_bp,   url_prefix="/api/market")
     app.register_blueprint(alerts_bp,   url_prefix="/api/alerts")
     app.register_blueprint(admin_bp,    url_prefix="/api/admin")
-
-    with app.app_context():
-        db.create_all()
 
     return app
