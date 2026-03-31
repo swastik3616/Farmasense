@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import create_access_token, jwt_required
 import hashlib
 
@@ -7,76 +7,104 @@ admin_bp = Blueprint("admin", __name__)
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
+
 @admin_bp.route("/login", methods=["POST"])
 def admin_login():
-    from app import db
-    from app.models.models import Admin
     data     = request.get_json()
     email    = data.get("email")
     password = data.get("password")
-    admin = Admin.query.filter_by(email=email).first()
-    if not admin or admin.password != hash_password(password):
+    
+    admins = current_app.db["admins"]
+    admin = admins.find_one({"email": email})
+
+    if not admin or admin.get("password") != hash_password(password):
         return jsonify({"error": "Invalid email or password"}), 401
+        
     token = create_access_token(
-        identity=str(admin.id),
+        identity=str(admin["_id"]),
         additional_claims={"role": "admin"}
     )
-    return jsonify({"token": token, "name": admin.name, "email": admin.email, "role": "admin"}), 200
+    return jsonify({
+        "token": token, 
+        "name": admin.get("name"), 
+        "email": admin.get("email"), 
+        "role": "admin"
+    }), 200
 
 
 @admin_bp.route("/setup", methods=["POST"])
 def setup_admin():
-    from app import db
-    from app.models.models import Admin
-    if Admin.query.first():
+    admins = current_app.db["admins"]
+
+    if admins.find_one():
         return jsonify({"error": "Admin already exists"}), 400
-    data  = request.get_json()
-    admin = Admin(
-        name     = data.get("name", "Admin"),
-        email    = data.get("email"),
-        password = hash_password(data.get("password"))
-    )
-    db.session.add(admin)
-    db.session.commit()
+        
+    data = request.get_json()
+    
+    from datetime import datetime
+    admins.insert_one({
+        "name": data.get("name", "Admin"),
+        "email": data.get("email"),
+        "password": hash_password(data.get("password")),
+        "created_at": datetime.utcnow()
+    })
+
     return jsonify({"message": "Admin created successfully"}), 201
 
 
 @admin_bp.route("/farmers", methods=["GET"])
 @jwt_required()
 def get_farmers():
-    from app.models.models import User
-    farmers = User.query.order_by(User.created_at.desc()).all()
-    return jsonify([{
-        "id"        : f.id,
-        "name"      : f.name,
-        "mobile"    : f.mobile_number,
-        "language"  : f.language_preference,
-        "farms_count": len(f.farms),
-        "created_at": str(f.created_at),
-    } for f in farmers]), 200
+    users = current_app.db["users"]
+    farms = current_app.db["farms"]
+    
+    # Sort by created_at descending if it exists, otherwise just fetch
+    all_users = list(users.find().sort("created_at", -1))
+    
+    result = []
+    for u in all_users:
+        user_id_str = str(u["_id"])
+        farms_count = farms.count_documents({"user_id": user_id_str})
+        
+        result.append({
+            "id"         : user_id_str,
+            "name"       : u.get("name"),
+            "mobile"     : u.get("mobile_number"),
+            "language"   : u.get("language_preference", "en"),
+            "farms_count": farms_count,
+            "created_at" : str(u.get("created_at", "N/A"))
+        })
+
+    return jsonify(result), 200
 
 
 @admin_bp.route("/advisories", methods=["GET"])
 @jwt_required()
 def get_advisories():
-    from app.models.models import Advisory
-    advisories = Advisory.query.order_by(Advisory.created_at.desc()).limit(50).all()
-    return jsonify([{
-        "id"              : a.id,
-        "farm_id"         : a.farm_id,
-        "recommended_crop": a.recommended_crop,
-        "season"          : a.season,
-        "created_at"      : str(a.created_at),
-    } for a in advisories]), 200
+    advisories_col = current_app.db["advisories"]
+    
+    advisories = list(advisories_col.find().sort("created_at", -1).limit(50))
+    result = []
+    
+    for a in advisories:
+        result.append({
+            "id"              : str(a["_id"]),
+            "farm_id"         : str(a.get("farm_id")),
+            "recommended_crop": a.get("recommended_crop"),
+            "season"          : a.get("season"),
+            "created_at"      : str(a.get("created_at", "N/A")),
+        })
+
+    return jsonify(result), 200
 
 
 @admin_bp.route("/analytics", methods=["GET"])
 @jwt_required()
 def get_analytics():
-    from app.models.models import User, Farm, Advisory, Alert
+    db = current_app.db
     return jsonify({
-        "total_farmers"   : User.query.count(),
-        "total_farms"     : Farm.query.count(),
-        "total_advisories": Advisory.query.count(),
-        "total_alerts"    : Alert.query.count(),
+        "total_farmers"   : db["users"].count_documents({}),
+        "total_farms"     : db["farms"].count_documents({}),
+        "total_advisories": db["advisories"].count_documents({}),
+        "total_alerts"    : db["alerts"].count_documents({}),
     }), 200
