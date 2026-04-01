@@ -1,22 +1,33 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from datetime import datetime
+from bson import ObjectId
+
+from app.security import (
+    ai_rate_limit,
+    sanitize_user_input,
+    validate_language,
+    validate_advisory_output,
+)
 
 advisory_bp = Blueprint("advisory", __name__)
 
 
 @advisory_bp.route("/generate", methods=["POST"])
 @jwt_required()
+@ai_rate_limit(max_per_minute=3)   # max 3 advisory generations per user per minute
 def generate():
-    data    = request.get_json()
-    farm_id = data.get("farm_id")
+    data     = request.get_json(force=True, silent=True) or {}
+    farm_id  = data.get("farm_id", "")
     language = data.get("language", "English")
 
+    # ── Validate language ──────────────────────────────────────
+    language, lang_err = validate_language(language)
+    # lang_err is non-fatal — we just silently fall back to English
+
     db = current_app.db
-    
-    from bson import ObjectId
+
     try:
-        # ✅ Get farm from MongoDB
         farm = db["farms"].find_one({"_id": ObjectId(farm_id)})
     except Exception:
         return jsonify({"error": "Invalid farm ID format"}), 400
@@ -36,29 +47,35 @@ def generate():
         "water_source"    : farm.get("water_source"),
     }
 
-    # Import here to avoid circular imports
+    # ── Call AI ────────────────────────────────────────────────
     from app.agents.orchestrator import generate_advisory
-    result = generate_advisory(farm_dict, language=language)
+    raw_result = generate_advisory(farm_dict, language=language)
 
-    # ✅ Save full report in Mongo
+    # ── Validate & sanitize LLM output before storage ──────────
+    sanitized_result, warnings = validate_advisory_output(raw_result)
+    if warnings:
+        current_app.logger.warning(f"Advisory output warnings for farm {farm_id}: {warnings}")
+
+    # ── Persist to MongoDB ─────────────────────────────────────
     report = db["advisory_reports"].insert_one({
         "farm_id"   : farm_id,
-        "result"    : result,
+        "result"    : sanitized_result,
+        "warnings"  : warnings,
+        "language"  : language,
         "created_at": datetime.utcnow(),
     })
 
-    # ✅ Save summary (also Mongo now)
     advisory = db["advisories"].insert_one({
-        "farm_id"        : farm_id,
-        "season"         : result.get("season"),
-        "report_id"      : str(report.inserted_id),
-        "created_at"     : datetime.utcnow(),
+        "farm_id"   : farm_id,
+        "season"    : sanitized_result.get("season"),
+        "report_id" : str(report.inserted_id),
+        "created_at": datetime.utcnow(),
     })
 
     return jsonify({
-        "advisory_id"   : str(advisory.inserted_id),
-        "season"        : result.get("season"),
-        "full_advisory" : result
+        "advisory_id" : str(advisory.inserted_id),
+        "season"      : sanitized_result.get("season"),
+        "full_advisory": sanitized_result
     }), 200
 
 
@@ -83,19 +100,36 @@ def history(farm_id):
 
 @advisory_bp.route("/chat", methods=["POST"])
 @jwt_required()
+@ai_rate_limit(max_per_minute=15)  # chat is more interactive — 15 msgs/min per user
 def chat():
-    data    = request.get_json()
-    farm_id = data.get("farm_id")
-    message = data.get("message")
+    data    = request.get_json(force=True, silent=True) or {}
+    farm_id = data.get("farm_id", "")
+    message = data.get("message", "")
     language = data.get("language", "English")
     history = data.get("history", [])
 
-    if not farm_id or not message:
-        return jsonify({"error": "Missing farm_id or message"}), 400
+    # ── Validate language ──────────────────────────────────────
+    language, _ = validate_language(language)
 
-    from bson import ObjectId
+    # ── Sanitize user message ──────────────────────────────────
+    message, input_err = sanitize_user_input(message, max_length=500)
+    if input_err:
+        return jsonify({"error": input_err}), 400
+
+    if not farm_id:
+        return jsonify({"error": "Missing farm_id"}), 400
+
+    # ── Sanitize chat history (prevent injection via history) ──
+    safe_history = []
+    for entry in history[:20]:   # cap history depth at 20 messages
+        role    = entry.get("role", "")
+        content = entry.get("content", "")
+        if role not in ("user", "ai"):
+            continue
+        clean_content, _ = sanitize_user_input(str(content), max_length=1000)
+        safe_history.append({"role": role, "content": clean_content})
+
     db = current_app.db
-    
     try:
         farm = db["farms"].find_one({"_id": ObjectId(farm_id)})
     except Exception:
@@ -105,23 +139,28 @@ def chat():
         return jsonify({"error": "Farm not found"}), 404
 
     farm_dict = {
-        "land_size_acres" : farm.get("land_size_acres"),
-        "soil_type"       : farm.get("soil_type"),
-        "district"        : farm.get("district"),
-        "state"           : farm.get("state"),
-        "water_source"    : farm.get("water_source"),
+        "land_size_acres": farm.get("land_size_acres"),
+        "soil_type"      : farm.get("soil_type"),
+        "district"       : farm.get("district"),
+        "state"          : farm.get("state"),
+        "water_source"   : farm.get("water_source"),
     }
 
     try:
         from app.agents.orchestrator import chat_with_advisory
         reply = chat_with_advisory(
-            farm_dict=farm_dict, 
-            history=history, 
-            message=message, 
+            farm_dict=farm_dict,
+            history=safe_history,
+            message=message,
             language=language
         )
+
+        # ── Basic output sanitization (strip control chars) ────
+        import re
+        reply = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", str(reply))
+
         return jsonify({"reply": reply}), 200
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 500
