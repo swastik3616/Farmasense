@@ -102,5 +102,12 @@ Ensure you have the following installed on your machine:
    npm start
    ```
 
+### Accessing the Portals
+
+Once both the frontend and backend servers are running, you can access the application in your browser:
+
+- **Farmer Portal**: `http://localhost:3000/farmer/login` *(Default Root)*
+- **Admin Dashboard**: `http://localhost:3000/admin/login`
+
 ## License
 This project is licensed under the [MIT License](LICENSE).

@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
 import { getUserFarms } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 
 function FarmerDashboard() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [farms, setFarms] = useState([]);
   const [loading, setLoading] = useState(true);

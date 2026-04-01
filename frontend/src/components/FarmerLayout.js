@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 // Simple SVG Icons
@@ -35,7 +35,6 @@ const LogOutIcon = () => (
 
 function FarmerLayout() {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
 
   return (
     <div className="farmer-layout">
