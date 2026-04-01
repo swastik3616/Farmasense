@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getFarm, generateAdvisory, chatAdvisory } from '../../services/api';
+import { SkeletonLoader, OfflineAlertBox } from '../../components/OfflineSkeletons';
 
 const INDIAN_LANGUAGES = [
   "English", "Hindi", "Bengali", "Telugu", "Marathi", "Tamil", "Urdu", 
@@ -23,9 +24,22 @@ function FarmDetails() {
   const [inputMsg, setInputMsg] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef(null);
+  
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
     fetchFarm();
+    
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -77,12 +91,20 @@ function FarmDetails() {
     }
   };
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading Farm Details...</div>;
+  if (loading) return (
+    <div style={{ padding: '20px' }}>
+      <SkeletonLoader height="60px" style={{marginBottom: '20px'}} />
+      <SkeletonLoader height="120px" style={{marginBottom: '30px'}} />
+      <SkeletonLoader height="300px" style={{marginBottom: '20px'}} count={2}/>
+    </div>
+  );
+  
   if (!farm) return <div style={{ padding: 40, textAlign: 'center' }}>Farm not found.</div>;
 
   return (
     <div style={{ paddingBottom: '80px' }}>
-      <div className="page-header" style={{ marginBottom: '16px' }}>
+      {isOffline && <OfflineAlertBox />}
+      <div className="page-header" style={{ marginBottom: '16px', marginTop: isOffline ? '0' : '20px' }}>
         <h1 className="page-title">{farm.name || "My Farm"}</h1>
         <button className="btn" style={{ width: 'auto', background: 'var(--gray-light)', padding: '10px 16px' }} onClick={() => navigate('/farmer/farms')}>
           Back
@@ -121,11 +143,13 @@ function FarmDetails() {
 
       <div className="auth-card" style={{ maxWidth: '100%', marginBottom: '20px', padding: '24px', textAlign: 'left' }}>
         <h3 style={{ marginTop: 0 }}>Smart Advisory Report</h3>
-        {!advisory ? (
+        {generating ? (
+          <SkeletonLoader height="150px" />
+        ) : !advisory ? (
           <div>
             <p style={{ color: 'var(--gray)' }}>Get an AI-powered crop recommendation report explicitly tailored to your farm's soil, region, and size. Written in {language}.</p>
-            <button className="btn btn-primary" onClick={handleGenerateAdvisory} disabled={generating} style={{ width: 'auto' }}>
-              {generating ? 'Analyzing data...' : `Generate Advisory (${language})`}
+            <button className="btn btn-primary" onClick={handleGenerateAdvisory} disabled={isOffline} style={{ width: 'auto' }}>
+              {isOffline ? 'Offline - Cannot Verify Data' : `Generate Advisory (${language})`}
             </button>
           </div>
         ) : (
@@ -195,8 +219,8 @@ function FarmDetails() {
           <button 
             type="submit" 
             className="btn btn-primary" 
-            style={{ width: '48px', height: '48px', borderRadius: '50%', padding: 0, marginLeft: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            disabled={chatLoading}
+            style={{ width: '48px', height: '48px', borderRadius: '50%', padding: 0, marginLeft: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: isOffline ? 0.5 : 1 }}
+            disabled={chatLoading || isOffline}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="22" y1="2" x2="11" y2="13"></line>

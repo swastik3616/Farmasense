@@ -1,14 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { getUserFarms } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
+import { SkeletonLoader, OfflineAlertBox } from '../../components/OfflineSkeletons';
 
 function FarmerDashboard() {
   const navigate = useNavigate();
   const [farms, setFarms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
     fetchFarms();
+    
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   const fetchFarms = async () => {
@@ -24,7 +37,8 @@ function FarmerDashboard() {
 
   return (
     <div>
-      <div className="page-header">
+      {isOffline && <OfflineAlertBox />}
+      <div className="page-header" style={{ marginTop: isOffline ? '0' : '20px' }}>
         <div>
           <h1 className="page-title">Welcome back!</h1>
           <p style={{ color: 'var(--gray)', margin: 0 }}>Here is your farm overview.</p>
@@ -59,7 +73,7 @@ function FarmerDashboard() {
 
       <h3>Recent Alerts</h3>
       {loading ? (
-        <p>Loading alerts...</p>
+        <SkeletonLoader height="120px" count={2} />
       ) : (
         farms.length > 0 ? (
           <div>
