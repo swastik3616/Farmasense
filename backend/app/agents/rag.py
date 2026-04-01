@@ -1,3 +1,4 @@
+from pymongo import MongoClient
 import os
 from flask import current_app
 from langchain_mongodb import MongoDBAtlasVectorSearch
@@ -5,14 +6,14 @@ from langchain_huggingface import HuggingFaceEmbeddings
 
 def get_rag_context(query: str, state_or_district: str = "") -> str:
     """
-    Fetches real agricultural knowledge from MongoDB Atlas Vector Search.
-    Fails over gracefully to return empty if indexes are not yet built.
+    Fetches real agricultural knowledge from MongoDB Atlas Vector Search using an isolated synchronous client.
     """
-    db = getattr(current_app, "db", None)
-    if not db:
-        return ""
-        
     try:
+        # Isolated sync client for Langchain synchronous nodes
+        uri = os.getenv("MONGO_URI")
+        client = MongoClient(uri)
+        db = client["farmsense"]
+        
         # Utilizing open source HuggingFace local embeddings
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         

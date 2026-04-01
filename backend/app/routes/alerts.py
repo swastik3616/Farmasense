@@ -1,28 +1,28 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
-import os
+from beanie import PydanticObjectId
+from app.models.documents import Farm, Alert, CommunityReport
 
 alerts_bp = Blueprint("alerts", __name__)
 
 
 @alerts_bp.route("/<farm_id>", methods=["GET"])
 @jwt_required()
-def get_alerts(farm_id):
-    db = current_app.db
-
-    alerts = db["alerts"].find({"farm_id": farm_id})\
-                         .sort("created_at", -1)\
-                         .limit(20)
+async def get_alerts(farm_id):
+    try:
+        alerts = await Alert.find(Alert.farm_id == farm_id).sort("-created_at").limit(20).to_list()
+    except Exception:
+        return jsonify({"error": "Invalid farm ID format"}), 400
 
     result = []
     for a in alerts:
         result.append({
-            "id"        : str(a["_id"]),
-            "type"      : a.get("alert_type"),
-            "message"   : a.get("message"),
-            "severity"  : a.get("severity"),
-            "created_at": str(a.get("created_at")),
+            "id"        : str(a.id),
+            "type"      : a.alert_type,
+            "message"   : a.message,
+            "severity"  : a.severity,
+            "created_at": str(a.created_at),
         })
 
     return jsonify(result), 200
@@ -30,81 +30,73 @@ def get_alerts(farm_id):
 
 @alerts_bp.route("/create", methods=["POST"])
 @jwt_required()
-def create_alert():
-    db = current_app.db
+async def create_alert():
     data = request.get_json()
 
-    alert = db["alerts"].insert_one({
-        "farm_id"    : data.get("farm_id"),
-        "alert_type" : data.get("alert_type"),
-        "message"    : data.get("message"),
-        "severity"   : data.get("severity", "medium"),
-        "sent_via"   : data.get("sent_via", "sms"),
-        "created_at" : datetime.utcnow(),
-    })
+    alert = Alert(
+        farm_id=data.get("farm_id", ""),
+        alert_type=data.get("alert_type", "Info"),
+        message=data.get("message", ""),
+        severity=data.get("severity", "medium"),
+        sent_via=data.get("sent_via", "sms")
+    )
+    await alert.insert()
 
     if data.get("sent_via", "sms") == "sms":
-        # Look up phone number for this farm/user
-        farm = db["farms"].find_one({"_id": data.get("farm_id")})
-        # Assuming the associated farmer user's phone is needed, 
-        # but for simplicity, we pass a dummy or fetched one.
-        farmer_phone = os.getenv("TWILIO_PHONE_NUMBER")  # Replace with actual user phone fetch logic if users collect phone.
+        # We need the user's phone number. Normally, fetch from Farm linked User,
+        # but defaulting to system TWILIO_PHONE_NUMBER per previous logic.
+        import os
+        farmer_phone = os.getenv("TWILIO_PHONE_NUMBER")
         
-        # Fire and forget background Celery job
         from app.tasks.communications import dispatch_sms_alert
         dispatch_sms_alert.delay(
             phone_number=farmer_phone, 
             body=data.get("message"),
-            context_dict={"alert_id": str(alert.inserted_id)}
+            context_dict={"alert_id": str(alert.id)}
         )
 
     return jsonify({
         "message": "Alert created",
-        "alert_id": str(alert.inserted_id)
+        "alert_id": str(alert.id)
     }), 201
 
 
 @alerts_bp.route("/community/report", methods=["POST"])
 @jwt_required()
-def community_report():
-    db = current_app.db
+async def community_report():
     user_id = get_jwt_identity()
     data = request.get_json()
 
-    report = db["community_reports"].insert_one({
-        "user_id"    : user_id,
-        "latitude"   : data.get("latitude"),
-        "longitude"  : data.get("longitude"),
-        "report_type": data.get("report_type"),
-        "description": data.get("description"),
-        "verified"   : False,
-        "created_at" : datetime.utcnow(),
-    })
+    report = CommunityReport(
+        user_id=str(user_id),
+        latitude=data.get("latitude"),
+        longitude=data.get("longitude"),
+        report_type=data.get("report_type", "General"),
+        description=data.get("description", ""),
+        verified=False
+    )
+    await report.insert()
 
     return jsonify({
         "message": "Report submitted",
-        "report_id": str(report.inserted_id)
+        "report_id": str(report.id)
     }), 201
 
 
 @alerts_bp.route("/community/nearby", methods=["GET"])
 @jwt_required()
-def nearby_reports():
-    db = current_app.db
-
-    reports = db["community_reports"].find({"verified": True})\
-                                     .sort("created_at", -1)\
-                                     .limit(10)
+async def nearby_reports():
+    reports = await CommunityReport.find(CommunityReport.verified == True).sort("-created_at").limit(10).to_list()
 
     result = []
     for r in reports:
         result.append({
-            "id"         : str(r["_id"]),
-            "report_type": r.get("report_type"),
-            "description": r.get("description"),
-            "latitude"   : r.get("latitude"),
-            "longitude"  : r.get("longitude"),
-            "created_at" : str(r.get("created_at")),
+            "id"         : str(r.id),
+            "report_type": r.report_type,
+            "description": r.description,
+            "latitude"   : r.latitude,
+            "longitude"  : r.longitude,
+            "created_at" : str(r.created_at),
         })
 
     return jsonify(result), 200

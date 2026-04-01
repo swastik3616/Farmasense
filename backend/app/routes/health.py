@@ -1,6 +1,5 @@
 import time
 from flask import Blueprint, jsonify, current_app
-from pymongo.errors import ConnectionFailure
 from redis import Redis
 
 health_bp = Blueprint("health", __name__)
@@ -8,20 +7,20 @@ health_bp = Blueprint("health", __name__)
 START_TIME = time.time()
 
 @health_bp.route("/", methods=["GET"])
-def health_check():
+async def health_check():
     status = {
         "status": "healthy",
         "uptime_seconds": round(time.time() - START_TIME, 2),
         "dependencies": {}
     }
 
-    # 1. Check MongoDB
+    # 1. Check MongoDB via Async Motor
     db = getattr(current_app, "db", None)
     if db is not None:
         try:
-            db.command("ping")
+            await db.command("ping")
             status["dependencies"]["mongodb"] = "ok"
-        except ConnectionFailure:
+        except Exception:
             status["dependencies"]["mongodb"] = "failed"
             status["status"] = "degraded"
     else:

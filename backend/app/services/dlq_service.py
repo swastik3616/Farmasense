@@ -1,19 +1,31 @@
-from datetime import datetime
-from flask import current_app
+import asyncio
+from typing import Optional
+from app.models.documents import DLQSms
 
-def log_to_dlq(phone_number: str, message: str, context: dict, error_reason: str):
+async def _log_to_dlq_async(phone_number: str, message: str, context: Optional[dict], error_reason: str):
     """
-    Saves a failed Twilio dispatch into the dlq_sms MongoDB collection
-    so that farmers don't silently miss critical alerts.
+    Async implementation to insert DLQ message using Beanie ODM.
     """
     try:
-        db = current_app.db
-        db["dlq_sms"].insert_one({
-            "phone_number": phone_number,
-            "message": message,
-            "context": context,
-            "error_reason": str(error_reason),
-            "created_at": datetime.utcnow()
-        })
+        dlq_entry = DLQSms(
+            phone_number=phone_number,
+            message=message,
+            context=context or {},
+            error_reason=str(error_reason)
+        )
+        await dlq_entry.insert()
     except Exception as db_err:
-        print(f"CRITICAL: Failed to write to DLQ in MongoDB: {db_err}")
+        print(f"CRITICAL: Failed to write to DLQ in MongoDB via Beanie: {db_err}")
+
+def log_to_dlq(phone_number: str, message: str, context: Optional[dict], error_reason: str):
+    """
+    Synchronous wrapper for Celery tasks. 
+    It creates a new event loop to safely execute the async Beanie insertion.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+    loop.run_until_complete(_log_to_dlq_async(phone_number, message, context, error_reason))

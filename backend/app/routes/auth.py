@@ -1,5 +1,6 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token
+from app.models.documents import User
 import random, string
 
 auth_bp   = Blueprint("auth", __name__)
@@ -27,7 +28,7 @@ def send_otp():
 
 
 @auth_bp.route("/verify-otp", methods=["POST"])
-def verify_otp():
+async def verify_otp():
     data   = request.get_json()
     mobile = data.get("mobile_number")
     otp    = data.get("otp")
@@ -36,20 +37,15 @@ def verify_otp():
     if otp_store.get(mobile) != otp:
         return jsonify({"error": "Invalid OTP"}), 401
 
-    users = current_app.db["users"]
-
-    # ✅ check user
-    user = users.find_one({"mobile_number": mobile})
+    # ✅ find user via Beanie
+    user = await User.find_one(User.mobile == mobile)
 
     # ✅ create user if not exists
     if not user:
-        result = users.insert_one({
-            "mobile_number": mobile,
-            "name": name
-        })
-        user_id = str(result.inserted_id)
-    else:
-        user_id = str(user["_id"])
+        user = User(mobile=mobile, name=name)
+        await user.insert()
+        
+    user_id = str(user.id)
 
     otp_store.pop(mobile, None)
 
