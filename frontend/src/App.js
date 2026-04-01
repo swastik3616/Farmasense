@@ -7,6 +7,13 @@ import Advisories from "./pages/admin/Advisories";
 import Alerts from "./pages/admin/Alerts";
 import Analytics from "./pages/admin/Analytics";
 
+// Farmer
+import FarmerLayout from "./components/FarmerLayout";
+import FarmerLogin from "./pages/farmer/Login";
+import FarmerDashboard from "./pages/farmer/FarmerDashboard";
+import MyFarms from "./pages/farmer/MyFarms";
+import AddFarm from "./pages/farmer/AddFarm";
+
 function ProtectedRoute({ children, role }) {
   const { user, loading } = useAuth();
   if (loading) return <div style={{ padding: 40, textAlign: "center" }}>Loading...</div>;
@@ -20,7 +27,10 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<Navigate to="/admin/login" />} />
+          {/* Default Route */}
+          <Route path="/" element={<Navigate to="/farmer/login" />} />
+
+          {/* Admin Routes */}
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/dashboard" element={
             <ProtectedRoute role="admin">
@@ -47,6 +57,18 @@ function App() {
               <Analytics />
             </ProtectedRoute>
           } />
+
+          {/* Farmer Routes */}
+          <Route path="/farmer/login" element={<FarmerLogin />} />
+          <Route path="/farmer" element={
+            <ProtectedRoute role="farmer">
+              <FarmerLayout />
+            </ProtectedRoute>
+          }>
+            <Route path="dashboard" element={<FarmerDashboard />} />
+            <Route path="farms" element={<MyFarms />} />
+            <Route path="add-farm" element={<AddFarm />} />
+          </Route>
         </Routes>
       </AuthProvider>
     </BrowserRouter>

@@ -6,6 +6,32 @@ from bson import ObjectId
 farm_bp = Blueprint("farm", __name__)
 
 
+@farm_bp.route("/", methods=["GET"])
+@jwt_required()
+def get_user_farms():
+    db = current_app.db
+    user_id = get_jwt_identity()
+    
+    try:
+        user_farms_cursor = db["farms"].find({"user_id": str(user_id)})
+        farms = []
+        for farm in user_farms_cursor:
+            farms.append({
+                "id"             : str(farm["_id"]),
+                "name"           : farm.get("name"),
+                "latitude"       : farm.get("latitude"),
+                "longitude"      : farm.get("longitude"),
+                "land_size_acres": farm.get("land_size_acres"),
+                "water_source"   : farm.get("water_source"),
+                "soil_type"      : farm.get("soil_type"),
+                "district"       : farm.get("district"),
+                "state"          : farm.get("state"),
+            })
+        return jsonify(farms), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to fetch farms", "details": str(e)}), 500
+
+
 @farm_bp.route("/create", methods=["POST"])
 @jwt_required()
 def create_farm():

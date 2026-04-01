@@ -33,6 +33,7 @@ export const verifyOtp = (mobile, otp) => API.post("/auth/verify-otp", { mobile_
 // Farm
 export const createFarm = (data) => API.post("/farm/create", data);
 export const getFarm = (id) => API.get(`/farm/${id}`);
+export const getUserFarms = () => API.get("/farm/");
 
 // Advisory
 export const generateAdvisory = (farmId) => API.post("/advisory/generate", { farm_id: farmId });
