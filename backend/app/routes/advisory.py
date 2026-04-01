@@ -47,9 +47,20 @@ def generate():
         "water_source"    : farm.get("water_source"),
     }
 
-    # ── Call AI ────────────────────────────────────────────────
-    from app.agents.orchestrator import generate_advisory
-    raw_result = generate_advisory(farm_dict, language=language)
+    # ── Call LangGraph Advisory Node ───────────────────────────
+    from app.agents.graph import farm_graph
+    
+    input_state = {
+        "farm_dict": farm_dict,
+        "language": language,
+        "request_type": "advisory",
+        "messages": [],
+        "current_message": ""
+    }
+    
+    # Run the state machine
+    output_state = farm_graph.invoke(input_state)
+    raw_result = output_state.get("advisory_result", {})
 
     # ── Validate & sanitize LLM output before storage ──────────
     sanitized_result, warnings = validate_advisory_output(raw_result)
@@ -147,13 +158,17 @@ def chat():
     }
 
     try:
-        from app.agents.orchestrator import chat_with_advisory
-        reply = chat_with_advisory(
-            farm_dict=farm_dict,
-            history=safe_history,
-            message=message,
-            language=language
-        )
+        from app.agents.graph import farm_graph
+        input_state = {
+            "farm_dict": farm_dict,
+            "language": language,
+            "request_type": "chat",
+            "messages": safe_history,
+            "current_message": message
+        }
+        
+        output_state = farm_graph.invoke(input_state)
+        reply = output_state.get("chat_reply", "Timeout connecting to knowledge base.")
 
         # ── Basic output sanitization (strip control chars) ────
         import re

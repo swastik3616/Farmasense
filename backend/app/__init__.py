@@ -37,4 +37,8 @@ def create_app():
     app.register_blueprint(admin_bp,    url_prefix="/api/admin")
     app.register_blueprint(health_bp,   url_prefix="/api/health")
 
+    # Initialize LangChain Global Caching
+    from app.agents.cache import init_semantic_cache
+    init_semantic_cache()
+
     return app
