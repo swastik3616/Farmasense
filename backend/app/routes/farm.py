@@ -2,8 +2,28 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from bson import ObjectId
+import os
+import requests
 
 farm_bp = Blueprint("farm", __name__)
+
+@farm_bp.route("/location", methods=["GET"])
+@jwt_required()
+def get_location():
+    api_key = os.getenv("Geolocation_ID")
+    if not api_key:
+        return jsonify({"error": "Geolocation API key not configured in backend .env"}), 500
+    
+    try:
+        # Optionally pass IP, but omitting it will default to public IP
+        response = requests.get(f"https://api.ipgeolocation.io/ipgeo?apiKey={api_key}")
+        if response.status_code == 200:
+            return jsonify(response.json()), 200
+        else:
+            return jsonify({"error": "Failed to fetch from IPGeolocation API"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 
 @farm_bp.route("/", methods=["GET"])

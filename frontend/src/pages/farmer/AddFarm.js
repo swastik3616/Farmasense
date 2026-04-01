@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createFarm } from '../../services/api';
+import { createFarm, getAutoLocation } from '../../services/api';
 
 function AddFarm() {
   const navigate = useNavigate();
@@ -23,26 +23,23 @@ function AddFarm() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleGetLocation = () => {
+  const handleGetLocation = async () => {
     setGeoLoading(true);
     setError(null);
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setFormData(prev => ({
-            ...prev,
-            latitude: position.coords.latitude.toFixed(6),
-            longitude: position.coords.longitude.toFixed(6)
-          }));
-          setGeoLoading(false);
-        },
-        (err) => {
-          setError("Failed to retrieve location. Please allow location access or map API key.");
-          setGeoLoading(false);
-        }
-      );
-    } else {
-      setError("Geolocation is not supported by your browser.");
+    try {
+      const response = await getAutoLocation();
+      const data = response.data;
+      
+      setFormData(prev => ({
+        ...prev,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        district: data.city || prev.district,
+        state: data.state_prov || prev.state
+      }));
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to retrieve location from backend.");
+    } finally {
       setGeoLoading(false);
     }
   };
@@ -119,9 +116,9 @@ function AddFarm() {
           <div className="alert-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <p style={{ margin: 0, fontWeight: 600 }}>Location (Coordinates)</p>
             <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--gray)' }}>Get accurate weather and advisory data by pinpointing your farm.</p>
-            
+
             <button type="button" className="btn" style={{ background: 'var(--primary-dark)', color: 'white' }} onClick={handleGetLocation} disabled={geoLoading}>
-              {geoLoading ? 'Getting Location...' : 'Use My Current Location'}
+              {geoLoading ? 'Getting Location...' : 'Use Auto Location'}
             </button>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '8px' }}>
