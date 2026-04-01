@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
+import os
 
 alerts_bp = Blueprint("alerts", __name__)
 
@@ -41,6 +42,21 @@ def create_alert():
         "sent_via"   : data.get("sent_via", "sms"),
         "created_at" : datetime.utcnow(),
     })
+
+    if data.get("sent_via", "sms") == "sms":
+        # Look up phone number for this farm/user
+        farm = db["farms"].find_one({"_id": data.get("farm_id")})
+        # Assuming the associated farmer user's phone is needed, 
+        # but for simplicity, we pass a dummy or fetched one.
+        farmer_phone = os.getenv("TWILIO_PHONE_NUMBER")  # Replace with actual user phone fetch logic if users collect phone.
+        
+        # Fire and forget background Celery job
+        from app.tasks.communications import dispatch_sms_alert
+        dispatch_sms_alert.delay(
+            phone_number=farmer_phone, 
+            body=data.get("message"),
+            context_dict={"alert_id": str(alert.inserted_id)}
+        )
 
     return jsonify({
         "message": "Alert created",

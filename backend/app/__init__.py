@@ -27,6 +27,7 @@ def create_app():
     from app.routes.market   import market_bp
     from app.routes.alerts   import alerts_bp
     from app.routes.admin    import admin_bp
+    from app.routes.health   import health_bp
 
     app.register_blueprint(auth_bp,     url_prefix="/api/auth")
     app.register_blueprint(farm_bp,     url_prefix="/api/farm")
@@ -34,5 +35,6 @@ def create_app():
     app.register_blueprint(market_bp,   url_prefix="/api/market")
     app.register_blueprint(alerts_bp,   url_prefix="/api/alerts")
     app.register_blueprint(admin_bp,    url_prefix="/api/admin")
+    app.register_blueprint(health_bp,   url_prefix="/api/health")
 
     return app

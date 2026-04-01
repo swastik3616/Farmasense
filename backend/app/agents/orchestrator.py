@@ -3,6 +3,7 @@ import json
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
 def get_llm():
     return ChatGroq(
@@ -30,14 +31,31 @@ CRITICAL: The values for 'season', 'recommended_crop', 'second_option_crop', 'av
     ])
     chain = prompt | llm
     
-    res = chain.invoke({
-        "language": language,
-        "land_size_acres": farm_dict.get("land_size_acres", 1),
-        "soil_type": farm_dict.get("soil_type", "Unknown"),
-        "district": farm_dict.get("district", "Unknown"),
-        "state": farm_dict.get("state", "Unknown"),
-        "water_source": farm_dict.get("water_source", "Unknown")
-    })
+    @retry(stop=stop_after_attempt(4), wait=wait_exponential(multiplier=1.5, min=2, max=10), reraise=True)
+    def _invoke_chain():
+        return chain.invoke({
+            "language": language,
+            "land_size_acres": farm_dict.get("land_size_acres", 1),
+            "soil_type": farm_dict.get("soil_type", "Unknown"),
+            "district": farm_dict.get("district", "Unknown"),
+            "state": farm_dict.get("state", "Unknown"),
+            "water_source": farm_dict.get("water_source", "Unknown")
+        })
+
+    try:
+        res = _invoke_chain()
+    except Exception as e:
+        print(f"CRITICAL: AI generation failed completely after retries: {e}")
+        return {
+            "season": "Upcoming",
+            "recommended_crop": "Network timeout, please try again",
+            "second_option_crop": "-",
+            "avoid_crop": "-",
+            "expected_profit_min": 0,
+            "expected_profit_max": 0,
+            "confidence_score": 0.0,
+            "final_advisory": f"Internal Error: API timeouts ({e})"
+        }
     
     content = res.content.strip()
     if content.startswith("```json"):
@@ -77,5 +95,12 @@ def chat_with_advisory(farm_dict, history, message, language="English"):
             
     messages.append(HumanMessage(content=message))
     
-    res = llm.invoke(messages)
-    return res.content
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=6), reraise=True)
+    def _invoke_chat():
+        return llm.invoke(messages)
+    
+    try:
+        res = _invoke_chat()
+        return res.content
+    except Exception as e:
+        return "I'm having trouble connecting to my agricultural database right now (API timeout). Please ask your question again in a minute."
