@@ -13,6 +13,7 @@ import FarmerLogin from "./pages/farmer/Login";
 import FarmerDashboard from "./pages/farmer/FarmerDashboard";
 import MyFarms from "./pages/farmer/MyFarms";
 import AddFarm from "./pages/farmer/AddFarm";
+import FarmDetails from "./pages/farmer/FarmDetails";
 
 function ProtectedRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -68,6 +69,7 @@ function App() {
             <Route path="dashboard" element={<FarmerDashboard />} />
             <Route path="farms" element={<MyFarms />} />
             <Route path="add-farm" element={<AddFarm />} />
+            <Route path="farm/:id" element={<FarmDetails />} />
           </Route>
         </Routes>
       </AuthProvider>

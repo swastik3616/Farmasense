@@ -37,8 +37,9 @@ export const getUserFarms = () => API.get("/farm/");
 export const getAutoLocation = () => API.get("/farm/location");
 
 // Advisory
-export const generateAdvisory = (farmId) => API.post("/advisory/generate", { farm_id: farmId });
+export const generateAdvisory = (farmId, language) => API.post("/advisory/generate", { farm_id: farmId, language });
 export const getAdvisoryHistory = (farmId) => API.get(`/advisory/history/${farmId}`);
+export const chatAdvisory = (farmId, message, language, history) => API.post("/advisory/chat", { farm_id: farmId, message, language, history });
 
 // Market
 export const getMandiPrices = (district) => API.get(`/market/prices/${district}`);
