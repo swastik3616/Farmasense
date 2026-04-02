@@ -15,7 +15,7 @@ def event_loop():
     yield loop
     loop.close()
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def app():
     """Create and configure a new app instance for each test suite."""
     app = create_app()
@@ -23,7 +23,10 @@ def app():
         "TESTING": True,
         "MONGO_URI": "mongodb://localhost:27017/test_farmsense",
     })
-    yield app
+    
+    # Push app context so that current_app and other extensions work in tests
+    with app.app_context():
+        yield app
 
 @pytest.fixture(autouse=True)
 async def mock_db(app):
