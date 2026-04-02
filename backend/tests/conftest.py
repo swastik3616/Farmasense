@@ -34,6 +34,14 @@ async def mock_db(app):
     client = AsyncMongoMockClient()
     db = client.get_database("test_farmsense")
     
+    # Patch list_collection_names to handle mongomock/beanie incompatibility
+    # beanie (1.21.0+) uses authorizedCollections=True which mongomock doesn't support
+    original_list_collection_names = db.list_collection_names
+    async def patched_list_collection_names(*args, **kwargs):
+        kwargs.pop("authorizedCollections", None)
+        return await original_list_collection_names(*args, **kwargs)
+    db.list_collection_names = patched_list_collection_names
+
     await init_beanie(database=db, document_models=[
         User, Admin, Farm, Advisory, AdvisoryReport, Alert, CommunityReport, DLQSms
     ])
