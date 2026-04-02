@@ -5,7 +5,7 @@ from app.routes.auth import otp_store
 @pytest.mark.asyncio
 async def test_send_otp(client):
     """Test that OTP is successfully generated and stored."""
-    response = client.post("/api/auth/send-otp", json={
+    response = await client.post("/api/auth/send-otp", json={
         "mobile_number": "9876543210"
     })
     
@@ -22,7 +22,7 @@ async def test_verify_otp_creates_user(client):
     
     assert await User.find_one(User.mobile == mobile) is None
     
-    response = client.post("/api/auth/verify-otp", json={
+    response = await client.post("/api/auth/verify-otp", json={
         "mobile_number": mobile,
         "otp": "112233",
         "name": "Test Farmer"
@@ -48,7 +48,7 @@ async def test_verify_otp_invalid(client):
     mobile = "1234567890"
     otp_store[mobile] = "112233"
     
-    response = client.post("/api/auth/verify-otp", json={
+    response = await client.post("/api/auth/verify-otp", json={
         "mobile_number": mobile,
         "otp": "wrong",
         "name": "Test Farmer"

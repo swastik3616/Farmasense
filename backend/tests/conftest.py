@@ -59,9 +59,11 @@ async def mock_db(app):
     await db.client.drop_database("test_farmsense")
 
 @pytest.fixture
-def client(app):
-    """A synchronous test client for the app."""
-    return app.test_client()
+async def client(app):
+    """An asynchronous test client for the app."""
+    # We use httpx.AsyncClient for truly async testing of Flask async routes
+    async with AsyncClient(app=app, base_url="http://testserver") as ac:
+        yield ac
 
 @pytest.fixture
 def runner(app):

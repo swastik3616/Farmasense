@@ -10,6 +10,7 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    jwt.init_app(app)
     CORS(app)
     # Initialize LangChain Global Caching (if set up)
     from app.agents.cache import init_semantic_cache
