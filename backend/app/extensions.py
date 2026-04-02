@@ -1,7 +1,1 @@
-from celery import Celery
-
-celery = Celery(
-    "farmsense", 
-    broker="redis://localhost:6379/0", 
-    backend="redis://localhost:6379/0"
-)
+from app.workers.celery_app import celery_app as celery
