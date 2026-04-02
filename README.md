@@ -5,14 +5,16 @@
 ![FarmaSense Banner](https://img.shields.io/badge/FarmaSense-Intelligent%20Agriculture-2ECC71?style=for-the-badge&logo=leaf&logoColor=white)
 
 [![React](https://img.shields.io/badge/React-19.x-61DAFB?style=flat-square&logo=react)](https://reactjs.org/)
-[![Flask](https://img.shields.io/badge/Flask-3.0-000000?style=flat-square&logo=flask)](https://flask.palletsprojects.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=flat-square&logo=mongodb)](https://www.mongodb.com/)
-[![LangChain](https://img.shields.io/badge/LangChain-Groq-FF6B35?style=flat-square)](https://python.langchain.com/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Groq-FF6B35?style=flat-square)](https://python.langchain.com/)
+[![Redis](https://img.shields.io/badge/Redis-Semantic%20Cache-DC382D?style=flat-square&logo=redis)](https://redis.io/)
+[![Celery](https://img.shields.io/badge/Celery-Workers-37814A?style=flat-square)](https://docs.celeryq.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
 **An AI-powered agricultural intelligence platform designed to empower Indian farmers with smart crop advisories, real-time alerts, and a multilingual AI assistant.**
 
-[Farmer Portal](#farmer-portal) · [Admin Dashboard](#admin-dashboard) · [API Docs](#api-endpoints) · [Getting Started](#getting-started)
+[Farmer Portal](#-farmer-portal) · [Admin Dashboard](#-admin-dashboard) · [Architecture](#-architecture) · [API Docs](#-api-endpoints) · [Getting Started](#-getting-started)
 
 </div>
 
@@ -20,7 +22,7 @@
 
 ## 📖 Overview
 
-FarmaSense bridges the gap between modern AI and traditional farming. Farmers can register their farms, get AI-generated crop recommendations, receive weather & market alerts, and converse with an intelligent agricultural assistant — all in their **native Indian language**, right from their mobile phone.
+FarmaSense bridges the gap between modern AI and traditional farming. Farmers can register their farms, get AI-generated crop recommendations grounded in a real agricultural knowledge base via RAG, receive proactive weather & market alerts, and converse with an intelligent agricultural assistant — all in their **native Indian language**, right from their mobile phone.
 
 ---
 
@@ -29,9 +31,11 @@ FarmaSense bridges the gap between modern AI and traditional farming. Farmers ca
 ### 🧑‍🌾 Farmer Portal
 - **OTP-Based Authentication** — Secure mobile number login, no password required
 - **Farm Registration** — Add farms with auto-location via IPGeolocation API
-- **AI Crop Advisory** — LangChain + Groq-powered recommendations tailored to soil, district, season, and land size
+- **AI Crop Advisory** — LangGraph state machine + Groq-powered recommendations tailored to soil, district, season, and land size — grounded by RAG over a crop/soil knowledge base
 - **Multilingual AI Chat** — Converse with the farm assistant in 13 Indian languages (Hindi, Marathi, Gujarati, Tamil, Telugu, and more)
-- **Mobile-First Design** — Glassmorphism UI with bottom navigation bar optimized for smartphones
+- **PWA with Offline Mode** — Works in low-signal conditions; advisories cached locally for field use
+- **Mobile-First Design** — Glassmorphism UI with bottom navigation bar, loading skeletons, and clear error states optimised for smartphones
+- **Proactive Weather Alerts** — Weather-triggered push notifications automatically surface crop protection advisories before farmers need to ask
 
 ### 🛡️ Admin Dashboard
 - **Secure Admin Login** — JWT-protected admin portal
@@ -41,11 +45,13 @@ FarmaSense bridges the gap between modern AI and traditional farming. Farmers ca
 - **Platform Analytics** — Visual insights with Recharts
 
 ### 🔧 Platform Infrastructure
-- **RESTful API** — Flask backend with well-organized Blueprint routes
+- **RESTful API** — FastAPI backend with modular route structure
 - **JWT Authentication** — Stateless secure token-based auth for both farmers and admins
-- **MongoDB** — Flexible NoSQL database for all collections
-- **Task Scheduling** — APScheduler for automated background jobs
-- **SMS Alerts** — Twilio integration for critical farm notifications
+- **MongoDB Atlas** — Flexible NoSQL database with enforced schemas via Beanie ODM and Atlas Vector Search for RAG
+- **Async Task Queue** — Celery + Redis workers for reliable background jobs with dead letter queue for failed SMS alerts
+- **Redis Semantic Cache** — Deduplicates repeated LLM calls; reduces Groq API costs and latency
+- **SMS / WhatsApp Alerts** — Twilio integration with retry logic for critical farm notifications
+- **CI/CD Pipeline** — GitHub Actions with lint, test, and coverage gates on every merge
 
 ---
 
@@ -53,17 +59,22 @@ FarmaSense bridges the gap between modern AI and traditional farming. Farmers ca
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | React.js 19, React Router v7, Axios |
+| **Frontend** | React.js 19, React Router v7, Axios, PWA (Service Worker) |
 | **Styling** | Vanilla CSS (mobile-first, glassmorphism) |
 | **Maps** | Leaflet + React-Leaflet |
 | **Charts** | Recharts |
-| **Backend** | Python 3.9+, Flask 3.0 |
-| **Database** | MongoDB (pymongo) |
-| **AI / LLM** | LangChain, ChatGroq (`llama-3.1-8b-instant`) |
-| **Authentication** | Flask-JWT-Extended |
+| **Backend** | Python 3.9+, FastAPI |
+| **Task Queue** | Celery + Redis |
+| **Database** | MongoDB Atlas (Beanie ODM) + Atlas Vector Search |
+| **Caching** | Redis (semantic similarity cache for LLM calls) |
+| **AI / LLM** | LangGraph, LangChain, ChatGroq (`llama-3.1-8b-instant`) |
+| **RAG** | MongoDB Atlas Vector Search + LangChain embeddings |
+| **Data Validation** | Pydantic v2 |
+| **Authentication** | JWT (python-jose) |
 | **Geolocation** | IPGeolocation.io API |
-| **Notifications** | Twilio (SMS/WhatsApp) |
-| **Scheduling** | APScheduler |
+| **Notifications** | Twilio (SMS/WhatsApp) with tenacity retry |
+| **Testing** | Pytest, pytest-asyncio, coverage |
+| **CI/CD** | GitHub Actions |
 
 ---
 
@@ -72,49 +83,73 @@ FarmaSense bridges the gap between modern AI and traditional farming. Farmers ca
 ```
 farmasense/
 │
-├── frontend/                    # React Application
+├── .github/
+│   └── workflows/
+│       └── ci.yml                   # Lint, test, coverage gate on every PR
+│
+├── frontend/                        # React PWA Application
 │   ├── public/
+│   │   ├── manifest.json            # PWA manifest
+│   │   └── service-worker.js        # Offline caching strategy
 │   └── src/
 │       ├── components/
-│       │   ├── AdminLayout.js   # Admin navigation wrapper
-│       │   └── FarmerLayout.js  # Farmer bottom nav (mobile-first)
+│       │   ├── AdminLayout.js       # Admin navigation wrapper
+│       │   ├── FarmerLayout.js      # Farmer bottom nav (mobile-first)
+│       │   └── Skeleton.js          # Loading skeleton components
 │       ├── context/
-│       │   └── AuthContext.js   # Global auth state (farmer + admin)
+│       │   └── AuthContext.js       # Global auth state (farmer + admin)
 │       ├── pages/
-│       │   ├── admin/           # Admin portal pages
+│       │   ├── admin/               # Admin portal pages
 │       │   │   ├── AdminLogin.js
 │       │   │   ├── Dashboard.js
 │       │   │   ├── Farmers.js
 │       │   │   ├── Advisories.js
 │       │   │   ├── Alerts.js
 │       │   │   └── Analytics.js
-│       │   └── farmer/          # Farmer portal pages
-│       │       ├── Login.js     # Mobile OTP login
+│       │   └── farmer/              # Farmer portal pages
+│       │       ├── Login.js         # Mobile OTP login
 │       │       ├── FarmerDashboard.js
 │       │       ├── MyFarms.js
-│       │       ├── AddFarm.js   # Farm registration + GPSLocation
-│       │       └── FarmDetails.js  # AI advisory + multilingual chat
+│       │       ├── AddFarm.js       # Farm registration + GPS location
+│       │       └── FarmDetails.js   # AI advisory + multilingual chat
 │       └── services/
-│           └── api.js           # Centralized Axios API client
+│           └── api.js               # Centralized Axios API client
 │
-└── backend/                     # Flask REST API
+└── backend/                         # FastAPI Application
     ├── app/
     │   ├── agents/
-    │   │   └── orchestrator.py  # LangChain AI logic (advisory + chat)
+    │   │   ├── advisory_agent.py    # LangGraph node — crop advisory generation
+    │   │   ├── chat_agent.py        # LangGraph node — multilingual chat
+    │   │   ├── guardrails.py        # Prompt injection defense + output validation
+    │   │   └── graph.py             # LangGraph state machine orchestration
     │   ├── models/
-    │   │   └── models.py        # SQLAlchemy models (legacy reference)
+    │   │   └── schemas.py           # Pydantic v2 models (request + response)
+    │   ├── db/
+    │   │   ├── documents.py         # Beanie ODM document definitions
+    │   │   └── indexes.py           # MongoDB index declarations
     │   ├── routes/
-    │   │   ├── auth.py          # OTP send/verify endpoints
-    │   │   ├── farm.py          # Farm CRUD + geolocation proxy
-    │   │   ├── advisory.py      # AI advisory generation + chat
-    │   │   ├── alerts.py        # Alerts management
-    │   │   ├── market.py        # Mandi price API
-    │   │   └── admin.py         # Admin-only protected routes
-    │   └── __init__.py          # App factory + MongoDB init
-    ├── seed.py                  # MongoDB seed script (mock data)
-    ├── .env                     # Environment variables (not committed)
+    │   │   ├── auth.py              # OTP send/verify endpoints
+    │   │   ├── farm.py              # Farm CRUD + geolocation proxy
+    │   │   ├── advisory.py          # AI advisory generation + chat
+    │   │   ├── alerts.py            # Alerts management
+    │   │   ├── market.py            # Mandi price API
+    │   │   └── admin.py             # Admin-only protected routes
+    │   ├── workers/
+    │   │   ├── celery_app.py        # Celery + Redis worker config
+    │   │   ├── alert_tasks.py       # Scheduled alert jobs with DLQ
+    │   │   └── weather_tasks.py     # Weather-triggered advisory jobs
+    │   ├── cache/
+    │   │   └── semantic_cache.py    # Redis semantic similarity cache for LLM
+    │   └── __init__.py              # App factory + MongoDB + Beanie init
+    ├── tests/
+    │   ├── test_auth.py             # Auth route unit tests
+    │   ├── test_advisory.py         # Advisory + chat route tests (mocked LLM)
+    │   ├── test_farm.py             # Farm CRUD tests
+    │   └── conftest.py              # Pytest fixtures + async test client
+    ├── seed.py                      # MongoDB seed script (mock data)
+    ├── .env.example                 # Example environment variables (commit this)
     ├── requirements.txt
-    └── run.py                   # App entry point
+    └── run.py                       # App entry point
 ```
 
 ---
@@ -125,10 +160,46 @@ farmasense/
 |---|---|
 | `admins` | Admin credentials (hashed passwords) |
 | `users` | Farmer profiles (mobile, name, language preference) |
-| `farms` | Farm details (location, soil, size, water source) |
-| `advisories` | AI-generated crop recommendation summaries |
-| `advisory_reports` | Full AI advisory JSON payloads |
-| `alerts` | Weather/market alerts sent to farmers |
+| `farms` | Farm details (location, soil, size, water source) — indexed on `user_id` |
+| `advisories` | AI-generated crop recommendation summaries — indexed on `farm_id`, `created_at` |
+| `advisory_reports` | Full AI advisory JSON payloads — Pydantic-validated before write |
+| `advisory_embeddings` | Crop/soil knowledge vectors for Atlas Vector Search RAG |
+| `alerts` | Weather/market alerts sent to farmers — indexed on `user_id`, `created_at` |
+
+---
+
+## 🏗️ Architecture
+
+### AI Pipeline (LangGraph)
+
+```
+User request
+     │
+     ▼
+Guardrails layer (prompt injection check)
+     │
+     ▼
+Redis semantic cache ──► Cache hit → return immediately
+     │ Cache miss
+     ▼
+LangGraph state machine
+  ├── advisory_agent  (RAG → Atlas Vector Search → Groq LLM)
+  └── chat_agent      (language detection → Groq LLM → multilingual response)
+     │
+     ▼
+Pydantic output validation
+     │
+     ▼
+Store in MongoDB + update cache
+```
+
+### Background Jobs (Celery)
+
+```
+Celery beat scheduler
+  ├── weather_tasks   → fetch weather → trigger proactive advisory → WhatsApp/SMS
+  └── alert_tasks     → send alerts → Twilio (tenacity retry) → DLQ on failure
+```
 
 ---
 
@@ -136,11 +207,10 @@ farmasense/
 
 ### Prerequisites
 
-Ensure the following are installed on your machine:
-
-- [Node.js](https://nodejs.org/) (v18+)
-- [Python](https://python.org/) (v3.9+)
-- [MongoDB](https://www.mongodb.com/) (local or Atlas URI)
+- [Node.js](https://nodejs.org/) v18+
+- [Python](https://python.org/) v3.9+
+- [MongoDB Atlas](https://www.mongodb.com/) account (for Vector Search)
+- [Redis](https://redis.io/) (local or managed)
 - [Git](https://git-scm.com/)
 
 ### 1. Clone the Repository
@@ -155,73 +225,81 @@ cd Farmasense
 ```bash
 cd backend
 
-# Create and activate a virtual environment
 python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
 
-# Windows
-venv\Scripts\activate
-
-# macOS/Linux
-source venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-Create a `.env` file inside the `backend/` directory:
+Copy and fill in the environment file:
+
+```bash
+cp .env.example .env
+```
 
 ```env
-# Flask
+# FastAPI
 SECRET_KEY=your_secret_key
-FLASK_ENV=development
 
-# MongoDB
-MONGO_URI=mongodb://localhost:27017/farmsense
+# MongoDB Atlas
+MONGO_URI=mongodb+srv://user:pass@cluster.mongodb.net/farmasense
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
 
 # Groq AI
 GROQ_API_KEY=your_groq_api_key
 
 # IPGeolocation
-Geolocation_ID=your_ipgeolocation_api_key
+GEOLOCATION_API_KEY=your_ipgeolocation_api_key
 
-# Twilio (Optional)
+# Twilio
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
 TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
 
-# WeatherMap (Optional)
+# OpenWeatherMap
 WEATHER_API_KEY=your_openweathermap_key
 ```
 
-Seed the database with mock data (optional):
+Seed the database and build the vector index:
 
 ```bash
 python seed.py
 ```
 
-Start the backend server:
+Start the API server and Celery worker in separate terminals:
 
 ```bash
+# Terminal 1 — FastAPI server
 python run.py
+
+# Terminal 2 — Celery worker
+celery -A app.workers.celery_app worker --loglevel=info
+
+# Terminal 3 — Celery beat scheduler (for periodic tasks)
+celery -A app.workers.celery_app beat --loglevel=info
 ```
 
-> The API will be accessible at `http://localhost:5000`
+> API will be accessible at `http://localhost:8000`  
+> Interactive docs at `http://localhost:8000/docs`
 
 ### 3. Frontend Setup
 
-Open a new terminal:
-
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start the development server
 npm start
 ```
 
-> The app will open at `http://localhost:3000`
+> App opens at `http://localhost:3000`
+
+### 4. Run Tests
+
+```bash
+cd backend
+pytest --cov=app tests/ --cov-report=term-missing
+```
 
 ---
 
@@ -230,7 +308,8 @@ npm start
 | Portal | URL | Credentials |
 |--------|-----|-------------|
 | **Farmer Portal** | `http://localhost:3000/farmer/login` | Any 10-digit mobile + OTP (check backend console) |
-| **Admin Dashboard** | `http://localhost:3000/admin/login` | `admin@farmsense.com` / `admin123` |
+| **Admin Dashboard** | `http://localhost:3000/admin/login` | `admin@farmasense.com` / `admin123` |
+| **API Docs (Swagger)** | `http://localhost:8000/docs` | — |
 
 ---
 
@@ -247,15 +326,15 @@ npm start
 |--------|----------|-------------|
 | `GET` | `/api/farm/` | Get all farms for current user |
 | `POST` | `/api/farm/create` | Register a new farm |
-| `GET` | `/api/farm/<id>` | Get a specific farm |
+| `GET` | `/api/farm/{id}` | Get a specific farm |
 | `GET` | `/api/farm/location` | Get location via IPGeolocation (proxy) |
 
 ### Advisory (AI)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/advisory/generate` | Generate AI crop advisory |
-| `POST` | `/api/advisory/chat` | Chat with AI farm assistant |
-| `GET` | `/api/advisory/history/<farm_id>` | Get advisory history |
+| `POST` | `/api/advisory/generate` | Generate RAG-grounded AI crop advisory |
+| `POST` | `/api/advisory/chat` | Chat with multilingual AI farm assistant |
+| `GET` | `/api/advisory/history/{farm_id}` | Get advisory history for a farm |
 
 ### Admin
 | Method | Endpoint | Description |
@@ -266,11 +345,14 @@ npm start
 | `GET` | `/api/admin/alerts` | List all alerts |
 | `GET` | `/api/admin/analytics` | Platform analytics |
 
+### Infrastructure
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Health check — service + DB + Redis status |
+
 ---
 
 ## 🌍 Supported Languages (AI Chat & Advisory)
-
-The AI assistant supports responses in the following Indian languages:
 
 `English` · `Hindi` · `Bengali` · `Telugu` · `Marathi` · `Tamil` · `Urdu` · `Gujarati` · `Kannada` · `Odia` · `Punjabi` · `Malayalam` · `Assamese`
 
@@ -282,7 +364,7 @@ The AI assistant supports responses in the following Indian languages:
 2. Create your feature branch: `git checkout -b feature/your-feature-name`
 3. Commit your changes: `git commit -m "feat: add your feature"`
 4. Push to the branch: `git push origin feature/your-feature-name`
-5. Open a pull request
+5. Open a pull request — CI must pass before merge
 
 ---
 
@@ -292,6 +374,3 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-<div align="center">
-  Made with ❤️ for Indian Farmers · Powered by AI
-</div>
