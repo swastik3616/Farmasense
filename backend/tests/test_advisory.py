@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 from app.models.documents import Farm, Advisory, AdvisoryReport
 from beanie import PydanticObjectId
+import app.agents.graph
 
 @pytest.fixture
 def mock_token():

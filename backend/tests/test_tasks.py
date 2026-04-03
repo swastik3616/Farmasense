@@ -24,6 +24,7 @@ def test_weather_monitor_severe_rain(app):
          patch("app.tasks.weather_monitor.requests.get") as mock_requests_get, \
          patch("app.tasks.weather_monitor.Alert.insert", new_callable=AsyncMock) as mock_alert_insert, \
          patch("app.tasks.weather_monitor.dispatch_sms_alert.delay") as mock_sms_delay, \
+         patch("app.tasks.weather_monitor.AsyncIOMotorClient") as mock_motor_client, \
          patch("app.tasks.weather_monitor.init_beanie", new_callable=AsyncMock) as mock_init_beanie:
         
         # Setup mock behavior
@@ -66,6 +67,7 @@ def test_weather_monitor_no_severe_weather(app):
     with patch("app.tasks.weather_monitor.Farm.find_all") as mock_find_farms, \
          patch("app.tasks.weather_monitor.requests.get") as mock_requests_get, \
          patch("app.tasks.weather_monitor.Alert.insert", new_callable=AsyncMock) as mock_alert_insert, \
+         patch("app.tasks.weather_monitor.AsyncIOMotorClient") as mock_motor_client, \
          patch("app.tasks.weather_monitor.init_beanie", new_callable=AsyncMock):
         
         mock_query = MagicMock()
