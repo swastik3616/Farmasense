@@ -6,11 +6,14 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:         
+  issues: write
+  contents: read
+
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
     
-    # Start background Redis for LangChain Elastic Caching tests
     services:
       redis:
         image: redis:latest
@@ -35,12 +38,10 @@ jobs:
     - name: Lint with flake8
       run: |
         cd backend
-        # Stop build if syntax errors or undefined names
         flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
         
     - name: Run Tests & Coverage Gate
       env:
-        # Dummy variables for tests to bypass None checks during init
         MONGO_URI: "mongodb://dummy"
         GROQ_API_KEY: "dummy"
         MANDI_API_KEY: "dummy"
