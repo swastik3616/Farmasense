@@ -11,7 +11,7 @@ def test_health_check(client):
         
         # In the test environment, app.db (AsyncMongoMockClient) is initialized 
         # via the mock_db fixture.
-        data = response.json()
+        data = response.json
         assert response.status_code in [200, 503] # Depends on mock DB state
         assert "status" in data
         assert "uptime_seconds" in data
@@ -25,7 +25,7 @@ def test_health_check_redis_fail(client):
         mock_instance.ping.return_value = False # Force failure
         
         response = client.get("/api/health/")
-        data = response.json()
+        data = response.json
         assert response.status_code == 503
         assert data["status"] == "degraded"
         assert data["dependencies"]["redis"] == "failed"

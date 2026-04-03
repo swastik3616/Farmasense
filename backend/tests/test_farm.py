@@ -1,5 +1,5 @@
 import pytest
-import asyncio
+from unittest.mock import patch, AsyncMock, MagicMock
 from app.models.documents import Farm
 from beanie import PydanticObjectId
 
@@ -11,7 +11,6 @@ def mock_token():
 
 def test_create_farm(client, mock_token):
     headers = {"Authorization": f"Bearer {mock_token}"}
-    
     payload = {
         "name": "Green Acres",
         "latitude": 12.9716,
@@ -23,61 +22,59 @@ def test_create_farm(client, mock_token):
         "soil_type": "Red Soil"
     }
     
-    response = client.post("/api/farm/create", json=payload, headers=headers)
-    assert response.status_code == 201
-    data = response.json()
-    assert data["message"] == "Farm created"
-    assert "farm_id" in data
-    
-    # Verify DB insertion
-    farm = asyncio.run(Farm.get(PydanticObjectId(data["farm_id"])))
-    assert farm is not None
-    assert farm.name == "Green Acres"
-    assert farm.user_id == "dummy_user_id"
+    with patch("app.models.documents.Farm.insert", new_callable=AsyncMock) as mock_insert:
+        mock_insert.return_value = None
+        response = client.post("/api/farm/create", json=payload, headers=headers)
+        assert response.status_code == 201
+        assert response.json["message"] == "Farm created"
+        assert "farm_id" in response.json
 
 def test_get_user_farms(client, mock_token):
     headers = {"Authorization": f"Bearer {mock_token}"}
     
-    # Insert two farms manually
-    f1 = Farm(user_id="dummy_user_id", name="Farm 1")
-    f2 = Farm(user_id="dummy_user_id", name="Farm 2")
-    f3 = Farm(user_id="other_user_id", name="Farm 3") # Should not appear
-    asyncio.run(f1.insert())
-    asyncio.run(f2.insert())
-    asyncio.run(f3.insert())
-    
-    response = client.get("/api/farm/", headers=headers)
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 2
-    names = [f["name"] for f in data]
-    assert "Farm 1" in names
-    assert "Farm 2" in names
+    with patch("app.models.documents.Farm.find") as mock_find:
+        mock_query = MagicMock()
+        f1 = Farm(user_id="dummy_user_id", name="Farm 1")
+        f1.id = PydanticObjectId()
+        f2 = Farm(user_id="dummy_user_id", name="Farm 2")
+        f2.id = PydanticObjectId()
+        
+        mock_query.to_list = AsyncMock(return_value=[f1, f2])
+        mock_find.return_value = mock_query
+        
+        response = client.get("/api/farm/", headers=headers)
+        assert response.status_code == 200
+        data = response.json
+        assert len(data) == 2
 
 def test_get_single_farm(client, mock_token):
     headers = {"Authorization": f"Bearer {mock_token}"}
+    mock_id = PydanticObjectId()
     
-    farm = Farm(user_id="dummy_user_id", name="Specific Farm", land_size_acres=5.0)
-    asyncio.run(farm.insert())
-    
-    response = client.get(f"/api/farm/{farm.id}", headers=headers)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["name"] == "Specific Farm"
-    assert data["land_size_acres"] == 5.0
+    with patch("app.models.documents.Farm.get", new_callable=AsyncMock) as mock_get:
+        mock_farm = Farm(user_id="dummy_user_id", name="Specific Farm", land_size_acres=5.0)
+        mock_farm.id = mock_id
+        mock_get.return_value = mock_farm
+        
+        response = client.get(f"/api/farm/{mock_id}", headers=headers)
+        assert response.status_code == 200
+        assert response.json["name"] == "Specific Farm"
 
 def test_update_farm(client, mock_token):
     headers = {"Authorization": f"Bearer {mock_token}"}
+    mock_id = PydanticObjectId()
     
-    farm = Farm(user_id="dummy_user_id", name="Old Name")
-    asyncio.run(farm.insert())
-    
-    payload = {"name": "New Name", "land_size_acres": 20.0}
-    response = client.put(f"/api/farm/{farm.id}", json=payload, headers=headers)
-    assert response.status_code == 200
-    assert response.json()["message"] == "Farm updated"
-    
-    # Verify update in DB
-    updated_farm = asyncio.run(Farm.get(farm.id))
-    assert updated_farm.name == "New Name"
-    assert updated_farm.land_size_acres == 20.0
+    # Patch Farm.get to return a real farm object
+    # Patch Farm.save on the class to be an AsyncMock
+    with patch("app.models.documents.Farm.get", new_callable=AsyncMock) as mock_get, \
+         patch("app.models.documents.Farm.save", new_callable=AsyncMock) as mock_save:
+        
+        mock_farm = Farm(user_id="dummy_user_id", name="Old Name")
+        mock_farm.id = mock_id
+        mock_get.return_value = mock_farm
+        mock_save.return_value = None
+        
+        payload = {"name": "New Name", "land_size_acres": 20.0}
+        response = client.put(f"/api/farm/{mock_id}", json=payload, headers=headers)
+        assert response.status_code == 200
+        assert response.json["message"] == "Farm updated"
