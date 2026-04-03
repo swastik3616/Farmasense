@@ -47,3 +47,11 @@ jobs:
       run: |
         cd backend
         pytest tests/ --cov=app --cov-fail-under=70
+
+    - name: Create Issue on Failure
+      if: failure()
+      uses: JasonEtco/create-an-issue@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        filename: .github/ISSUE_TEMPLATE/ci_failure.md
