@@ -1,7 +1,7 @@
 ---
 title: "CI Failure in branch ${{ github.ref }}"
 labels: [ "bug", "automated-ci" ]
-assignees: [ "${{ github.actor }}" ]
+assignees: []
 ---
 
 ### ⚠️ Backend CI Failure Detailed Report
