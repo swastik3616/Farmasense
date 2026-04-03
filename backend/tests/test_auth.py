@@ -10,7 +10,7 @@ async def test_send_otp(client):
     })
     
     assert response.status_code == 200
-    assert response.json == {"message": "OTP sent successfully"}
+    assert response.json() == {"message": "OTP sent successfully"}
     assert "9876543210" in otp_store
     assert len(otp_store["9876543210"]) == 6
 
@@ -29,7 +29,7 @@ async def test_verify_otp_creates_user(client):
     })
     
     assert response.status_code == 200
-    data = response.json
+    data = response.json()
     assert "token" in data
     assert data["name"] == "Test Farmer"
     assert "user_id" in data
@@ -55,4 +55,4 @@ async def test_verify_otp_invalid(client):
     })
     
     assert response.status_code == 401
-    assert "error" in response.json
+    assert "error" in response.json()

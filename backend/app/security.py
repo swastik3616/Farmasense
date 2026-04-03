@@ -11,7 +11,7 @@ import html
 from collections import defaultdict
 from threading import Lock
 from functools import wraps
-from flask import jsonify
+from flask import jsonify, current_app
 from flask_jwt_extended import get_jwt_identity
 
 # ─────────────────────────────────────────────
@@ -54,6 +54,10 @@ def ai_rate_limit(max_per_minute: int = 5):
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
+            # Bypass rate limiting during unit tests
+            if current_app.config.get("TESTING"):
+                return fn(*args, **kwargs)
+
             user_id = str(get_jwt_identity())
             if not _check_rate_limit(user_id, max_per_minute):
                 return jsonify({
