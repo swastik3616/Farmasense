@@ -14,8 +14,8 @@ advisory_bp = Blueprint("advisory", __name__)
 
 
 @advisory_bp.route("/generate", methods=["POST"])
-@jwt_required()
 @ai_rate_limit(max_per_minute=3)
+@jwt_required()
 async def generate():
     data     = request.get_json(force=True, silent=True) or {}
     farm_id  = data.get("farm_id", "")
@@ -106,8 +106,8 @@ async def history(farm_id):
 
 
 @advisory_bp.route("/chat", methods=["POST"])
-@jwt_required()
 @ai_rate_limit(max_per_minute=15)
+@jwt_required()
 async def chat():
     data    = request.get_json(force=True, silent=True) or {}
     farm_id = data.get("farm_id", "")

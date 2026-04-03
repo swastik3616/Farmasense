@@ -58,15 +58,11 @@ async def mock_db(app):
     # Teardown
     await db.client.drop_database("test_farmsense")
 
-from asgiref.wsgi import WsgiToAsgi
-
 @pytest.fixture
 async def client(app):
     """An asynchronous test client for the app."""
-    # We use httpx.AsyncClient for truly async testing of Flask async routes
-    # and wrap the Flask WSGI app in ASGI for compatibility
-    asgi_app = WsgiToAsgi(app)
-    async with AsyncClient(app=asgi_app, base_url="http://testserver") as ac:
+    # We use httpx.AsyncClient for testing. It natively supports WSGI apps like Flask.
+    async with AsyncClient(app=app, base_url="http://testserver") as ac:
         yield ac
 
 @pytest.fixture

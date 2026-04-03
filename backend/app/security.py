@@ -40,6 +40,8 @@ def _check_rate_limit(user_id: str, max_per_minute: int = 5) -> bool:
         return False      # throttled
 
 
+import inspect
+
 def ai_rate_limit(max_per_minute: int = 5):
     """
     Decorator — apply to AI endpoints.
@@ -52,19 +54,34 @@ def ai_rate_limit(max_per_minute: int = 5):
         def generate(): ...
     """
     def decorator(fn):
-        @wraps(fn)
-        async def wrapper(*args, **kwargs):
-            # Bypass rate limiting during unit tests
-            if current_app.config.get("TESTING"):
-                return await fn(*args, **kwargs)
+        if inspect.iscoroutinefunction(fn):
+            @wraps(fn)
+            async def wrapper(*args, **kwargs):
+                # Bypass rate limiting during unit tests
+                if current_app.config.get("TESTING"):
+                    return await fn(*args, **kwargs)
 
-            user_id = str(get_jwt_identity())
-            if not _check_rate_limit(user_id, max_per_minute):
-                return jsonify({
-                    "error": "Too many requests. Please wait before generating again.",
-                    "retry_in": "60 seconds"
-                }), 429
-            return await fn(*args, **kwargs)
+                user_id = str(get_jwt_identity())
+                if not _check_rate_limit(user_id, max_per_minute):
+                    return jsonify({
+                        "error": "Too many requests. Please wait before generating again.",
+                        "retry_in": "60 seconds"
+                    }), 429
+                return await fn(*args, **kwargs)
+        else:
+            @wraps(fn)
+            def wrapper(*args, **kwargs):
+                # Bypass rate limiting during unit tests
+                if current_app.config.get("TESTING"):
+                    return fn(*args, **kwargs)
+
+                user_id = str(get_jwt_identity())
+                if not _check_rate_limit(user_id, max_per_minute):
+                    return jsonify({
+                        "error": "Too many requests. Please wait before generating again.",
+                        "retry_in": "60 seconds"
+                    }), 429
+                return fn(*args, **kwargs)
         return wrapper
     return decorator
 
