@@ -53,10 +53,10 @@ def ai_rate_limit(max_per_minute: int = 5):
     """
     def decorator(fn):
         @wraps(fn)
-        def wrapper(*args, **kwargs):
+        async def wrapper(*args, **kwargs):
             # Bypass rate limiting during unit tests
             if current_app.config.get("TESTING"):
-                return fn(*args, **kwargs)
+                return await fn(*args, **kwargs)
 
             user_id = str(get_jwt_identity())
             if not _check_rate_limit(user_id, max_per_minute):
@@ -64,7 +64,7 @@ def ai_rate_limit(max_per_minute: int = 5):
                     "error": "Too many requests. Please wait before generating again.",
                     "retry_in": "60 seconds"
                 }), 429
-            return fn(*args, **kwargs)
+            return await fn(*args, **kwargs)
         return wrapper
     return decorator
 
