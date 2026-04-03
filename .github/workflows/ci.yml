@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: ["main"]
 
-# ✅ Required for creating issues
+# Required for creating issues
 permissions:
   issues: write
   contents: read
@@ -51,7 +51,7 @@ jobs:
           cd backend
           pytest tests/ --cov=app --cov-fail-under=70
 
-      # ✅ FIXED: Only create issue on push (not PR)
+      # FIXED: Only create issue on push (not PR)
       - name: Create Issue on Failure
         if: failure() && github.event_name == 'push'
         uses: JasonEtco/create-an-issue@v2
