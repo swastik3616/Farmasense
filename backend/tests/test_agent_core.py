@@ -8,7 +8,7 @@ def test_rag_no_env(monkeypatch):
 
 
 def test_agent_generate():
-    from app.agents.advisory import farm_advisor
+    from app.agents.advisory import farm_advisor  
     
     class DummyFarm:
         name = "Test Farm"
@@ -22,7 +22,7 @@ def test_agent_generate():
 
 
 def test_agent_chat():
-    from app.agents.agent_advisory import farm_advisor
+    from app.agents.advisory import farm_advisor   
     
     class DummyFarm:
         name = "Test Farm"
