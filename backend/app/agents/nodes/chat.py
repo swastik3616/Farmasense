@@ -14,21 +14,14 @@ def get_chat_llm():
     )
 
 def chat_node(state: GraphState) -> dict:
-    """
-    LangGraph node for chat.
-    Falls back to rule-based logic if LLM is unavailable (for tests/CI).
-    """
-
     message = state.get("current_message", "")
 
-    # ✅ TEST-SAFE FALLBACK (CRITICAL FIX)
+    # ✅ TEST-SAFE FALLBACK
     if not os.getenv("GROQ_API_KEY"):
         if "water" in message.lower():
             return {"chat_reply": "Yes, water the plants."}
-        else:
-            return {"chat_reply": "Follow best practices."}
+        return {"chat_reply": "Follow best practices."}
 
-    # 🔽 ORIGINAL LOGIC (only runs in real env)
     llm = get_chat_llm()
     
     farm = state["farm_dict"]
