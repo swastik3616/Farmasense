@@ -1,39 +1,81 @@
 from pymongo import MongoClient
 import os
-from flask import current_app
-from langchain_mongodb import MongoDBAtlasVectorSearch
-from langchain_huggingface import HuggingFaceEmbeddings
+
+
+def _get_mongo_client():
+    """Create MongoDB client safely."""
+    uri = os.getenv("MONGO_URI")
+    if not uri:
+        raise ValueError("MONGO_URI is not set")
+
+    return MongoClient(uri)
+
+
+def _get_vector_store(db):
+    """
+    Lazy load heavy dependencies and create vector store.
+    This prevents CI/test failures when dependencies are missing.
+    """
+    try:
+        from langchain_mongodb import MongoDBAtlasVectorSearch
+        from langchain_huggingface import HuggingFaceEmbeddings
+    except ImportError as e:
+        print(f"[RAG] Dependencies not installed: {e}")
+        return None
+
+    try:
+        embeddings = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2"
+        )
+
+        return MongoDBAtlasVectorSearch(
+            collection=db["crop_knowledge"],
+            embedding=embeddings,
+            index_name="default",
+        )
+
+    except Exception as e:
+        print(f"[RAG] Vector store init failed: {e}")
+        return None
+
 
 def get_rag_context(query: str, state_or_district: str = "") -> str:
     """
-    Fetches real agricultural knowledge from MongoDB Atlas Vector Search using an isolated synchronous client.
+    Fetch agricultural knowledge using MongoDB Atlas Vector Search.
+
+    Returns:
+        str: Combined relevant context or empty string if unavailable.
     """
     try:
-        # Isolated sync client for Langchain synchronous nodes
-        uri = os.getenv("MONGO_URI")
-        client = MongoClient(uri)
+        # Step 1: DB connection
+        client = _get_mongo_client()
         db = client["farmsense"]
-        
-        # Utilizing open source HuggingFace local embeddings
-        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        
-        # We assume the user has a "crop_knowledge" collection with Atlas Vector Search index configured.
-        collection = db["crop_knowledge"]
-        
-        vector_store = MongoDBAtlasVectorSearch(
-            collection=collection,
-            embedding=embeddings,
-            index_name="default"  # Assuming standard index
-        )
-        
-        search_query = f"{query} in {state_or_district}"
+
+        # Step 2: Vector store (lazy-loaded)
+        vector_store = _get_vector_store(db)
+        if vector_store is None:
+            return ""
+
+        # Step 3: Build query
+        search_query = query.strip()
+        if state_or_district:
+            search_query += f" in {state_or_district}"
+
+        # Step 4: Perform similarity search
         results = vector_store.similarity_search(search_query, k=3)
-        
+
         if not results:
             return ""
-            
-        return "\n".join([doc.page_content for doc in results])
-        
+
+        # Step 5: Extract content safely
+        context_chunks = []
+        for doc in results:
+            content = getattr(doc, "page_content", None)
+            if content:
+                context_chunks.append(content)
+
+        return "\n".join(context_chunks)
+
     except Exception as e:
-        print(f"[RAG] Vector Search skipped/failed: {e}")
+        print(f"[RAG] Failed to fetch context: {e}")
         return ""
