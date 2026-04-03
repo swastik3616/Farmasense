@@ -64,8 +64,6 @@ def test_update_farm(client, mock_token):
     headers = {"Authorization": f"Bearer {mock_token}"}
     mock_id = PydanticObjectId()
     
-    # Patch Farm.get to return a real farm object
-    # Patch Farm.save on the class to be an AsyncMock
     with patch("app.models.documents.Farm.get", new_callable=AsyncMock) as mock_get, \
          patch("app.models.documents.Farm.save", new_callable=AsyncMock) as mock_save:
         

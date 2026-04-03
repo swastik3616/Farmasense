@@ -55,3 +55,45 @@ def test_advisory_404_farm(client, mock_token):
         response = client.post("/api/advisory/generate", json={"farm_id": str(PydanticObjectId())}, headers=headers)
         assert response.status_code == 404
         assert "error" in response.json
+
+def test_advisory_generate(client, mock_token):
+    headers = {"Authorization": f"Bearer {mock_token}"}
+    mock_id = PydanticObjectId()
+    
+    with patch("app.routes.advisory.Farm.get", new_callable=AsyncMock) as mock_farm_get, \
+         patch("app.routes.advisory.AdvisoryReport.insert", new_callable=AsyncMock) as mock_report_insert, \
+         patch("app.routes.advisory.Advisory.insert", new_callable=AsyncMock) as mock_adv_insert, \
+         patch("app.agents.graph.farm_graph.invoke") as mock_graph_invoke:
+        
+        mock_farm = Farm(user_id="user", name="test", latitude=1., longitude=2.)
+        mock_farm.id = mock_id
+        mock_farm_get.return_value = mock_farm
+        
+        mock_graph_invoke.return_value = {"advisory_result": {"season": "Kharif", "summary": "good"}}
+        mock_report_insert.return_value = None
+        mock_adv_insert.return_value = None
+        
+        response = client.post("/api/advisory/generate", json={"farm_id": str(mock_id)}, headers=headers)
+        assert response.status_code == 200
+        assert response.json["season"] == "Kharif"
+        
+def test_advisory_chat(client, mock_token):
+    headers = {"Authorization": f"Bearer {mock_token}"}
+    mock_id = PydanticObjectId()
+    
+    with patch("app.routes.advisory.Farm.get", new_callable=AsyncMock) as mock_farm_get, \
+         patch("app.agents.graph.farm_graph.invoke") as mock_graph_invoke:
+        
+        mock_farm = Farm(user_id="user", name="test")
+        mock_farm.id = mock_id
+        mock_farm_get.return_value = mock_farm
+        
+        mock_graph_invoke.return_value = {"chat_reply": "Yes, water the plants."}
+        
+        response = client.post("/api/advisory/chat", json={
+            "farm_id": str(mock_id),
+            "message": "Should I water?",
+            "history": [{"role": "user", "content": "hi"}]
+        }, headers=headers)
+        assert response.status_code == 200
+        assert response.json["reply"] == "Yes, water the plants."
