@@ -22,7 +22,7 @@ def test_agent_generate():
 
 
 def test_agent_chat():
-    from app.agents.agent_advisor import farm_advisor
+    from app.agents.agent_advisory import farm_advisor
     
     class DummyFarm:
         name = "Test Farm"
