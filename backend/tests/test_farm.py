@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 from app.models.documents import Farm
 from beanie import PydanticObjectId
 
@@ -8,8 +9,7 @@ def mock_token():
     from flask_jwt_extended import create_access_token
     return create_access_token(identity="dummy_user_id")
 
-@pytest.mark.asyncio
-async def test_create_farm(client, mock_token):
+def test_create_farm(client, mock_token):
     headers = {"Authorization": f"Bearer {mock_token}"}
     
     payload = {
@@ -23,31 +23,30 @@ async def test_create_farm(client, mock_token):
         "soil_type": "Red Soil"
     }
     
-    response = await client.post("/api/farm/create", json=payload, headers=headers)
+    response = client.post("/api/farm/create", json=payload, headers=headers)
     assert response.status_code == 201
     data = response.json()
     assert data["message"] == "Farm created"
     assert "farm_id" in data
     
     # Verify DB insertion
-    farm = await Farm.get(PydanticObjectId(data["farm_id"]))
+    farm = asyncio.run(Farm.get(PydanticObjectId(data["farm_id"])))
     assert farm is not None
     assert farm.name == "Green Acres"
     assert farm.user_id == "dummy_user_id"
 
-@pytest.mark.asyncio
-async def test_get_user_farms(client, mock_token):
+def test_get_user_farms(client, mock_token):
     headers = {"Authorization": f"Bearer {mock_token}"}
     
     # Insert two farms manually
     f1 = Farm(user_id="dummy_user_id", name="Farm 1")
     f2 = Farm(user_id="dummy_user_id", name="Farm 2")
     f3 = Farm(user_id="other_user_id", name="Farm 3") # Should not appear
-    await f1.insert()
-    await f2.insert()
-    await f3.insert()
+    asyncio.run(f1.insert())
+    asyncio.run(f2.insert())
+    asyncio.run(f3.insert())
     
-    response = await client.get("/api/farm/", headers=headers)
+    response = client.get("/api/farm/", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
@@ -55,32 +54,30 @@ async def test_get_user_farms(client, mock_token):
     assert "Farm 1" in names
     assert "Farm 2" in names
 
-@pytest.mark.asyncio
-async def test_get_single_farm(client, mock_token):
+def test_get_single_farm(client, mock_token):
     headers = {"Authorization": f"Bearer {mock_token}"}
     
     farm = Farm(user_id="dummy_user_id", name="Specific Farm", land_size_acres=5.0)
-    await farm.insert()
+    asyncio.run(farm.insert())
     
-    response = await client.get(f"/api/farm/{farm.id}", headers=headers)
+    response = client.get(f"/api/farm/{farm.id}", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "Specific Farm"
     assert data["land_size_acres"] == 5.0
 
-@pytest.mark.asyncio
-async def test_update_farm(client, mock_token):
+def test_update_farm(client, mock_token):
     headers = {"Authorization": f"Bearer {mock_token}"}
     
     farm = Farm(user_id="dummy_user_id", name="Old Name")
-    await farm.insert()
+    asyncio.run(farm.insert())
     
     payload = {"name": "New Name", "land_size_acres": 20.0}
-    response = await client.put(f"/api/farm/{farm.id}", json=payload, headers=headers)
+    response = client.put(f"/api/farm/{farm.id}", json=payload, headers=headers)
     assert response.status_code == 200
     assert response.json()["message"] == "Farm updated"
     
     # Verify update in DB
-    updated_farm = await Farm.get(farm.id)
+    updated_farm = asyncio.run(Farm.get(farm.id))
     assert updated_farm.name == "New Name"
     assert updated_farm.land_size_acres == 20.0

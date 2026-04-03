@@ -5,9 +5,8 @@ from app.agents.nodes.advisory import generate_advisory_node
 from app.agents.state import GraphState
 from app.agents.schemas import AdvisoryReport
 
-@pytest.mark.asyncio
 @patch('app.agents.nodes.advisory.get_llm')
-async def test_generate_advisory_node_mocked_llm(mock_get_llm):
+def test_generate_advisory_node_mocked_llm(mock_get_llm):
     """
     Test the LangChain integration explicitly by mocking the Groq API call 
     and returning a fake structured payload.
@@ -32,12 +31,6 @@ async def test_generate_advisory_node_mocked_llm(mock_get_llm):
         final_advisory="Test string"
     )
     
-    # The actual chain is created from prompt | structured_llm.
-    # We mock the internal _invoke logic by patching the chain result.
-    # Since the chain is built dynamically inside the function, we can patch the invoke method of the pipeline.
-    # A cleaner way is to just mock the structured_llm and let Langchain build the runnable sequence natively.
-    # But since it's a sequence, mocking the return value of structured_llm's invoke is required.
-    
     # Alternatively, we patch the chain invoke entirely:
     with patch('langchain_core.runnables.base.RunnableSequence.invoke', return_value=mock_chain_invoke.return_value):
         state: GraphState = {
@@ -55,9 +48,8 @@ async def test_generate_advisory_node_mocked_llm(mock_get_llm):
         assert result["advisory_result"]["recommended_crop"] == "Wheat"
         assert result["advisory_result"]["confidence_score"] == 0.9
 
-@pytest.mark.asyncio
 @patch('app.agents.nodes.chat.get_chat_llm')
-async def test_chat_node_mocked_llm(mock_get_chat_llm):
+def test_chat_node_mocked_llm(mock_get_chat_llm):
     mock_llm = MagicMock()
     mock_get_chat_llm.return_value = mock_llm
     
