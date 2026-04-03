@@ -1,27 +1,10 @@
-import os
-
-from langchain_groq import ChatGroq
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from tenacity import retry, stop_after_attempt, wait_exponential
-
-from app.agents.state import GraphState
-
-
-def get_chat_llm():
-    return ChatGroq(
-        api_key=os.getenv("GROQ_API_KEY"),
-        model_name="llama-3.1-8b-instant",
-        temperature=0.7
-    )
-
-
 def chat_node(state: GraphState) -> dict:
     message = state.get("current_message", "")
 
     api_key = os.getenv("GROQ_API_KEY")
 
-    # ✅ TEST/CI fallback
-    if not api_key or api_key.strip() == "" or "PYTEST_CURRENT_TEST" in os.environ:
+    # ✅ ONLY fallback when API key is missing
+    if not api_key or api_key.strip() == "":
         if "water" in message.lower():
             return {"chat_reply": "Yes, water the plants."}
         return {"chat_reply": "Follow best practices."}
