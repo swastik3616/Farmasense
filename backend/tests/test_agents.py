@@ -11,7 +11,6 @@ def test_generate_advisory_node_success(mock_get_llm):
     """Test successful advisory generation with mocked LLM."""
     mock_llm = MagicMock()
     mock_structured_llm = MagicMock()
-
     mock_get_llm.return_value = mock_llm
     mock_llm.with_structured_output.return_value = mock_structured_llm
 
@@ -26,8 +25,9 @@ def test_generate_advisory_node_success(mock_get_llm):
         final_advisory="Test advice"
     )
 
-    # Patch invoke on the structured LLM mock directly
-    mock_structured_llm.invoke.return_value = mock_report
+    mock_chain = MagicMock()
+    mock_chain.invoke.return_value = mock_report
+    mock_structured_llm.__ror__ = MagicMock(return_value=mock_chain)
 
     state: GraphState = {
         "farm_dict": {"land_size_acres": 5, "soil_type": "Clay", "district": "Test", "state": "Test", "water_source": "Rain"},
@@ -49,12 +49,12 @@ def test_generate_advisory_node_fallback(mock_get_llm):
     """Test advisory node fallback when LLM fails."""
     mock_llm = MagicMock()
     mock_structured_llm = MagicMock()
-
     mock_get_llm.return_value = mock_llm
     mock_llm.with_structured_output.return_value = mock_structured_llm
 
-    # Force exception on invoke
-    mock_structured_llm.invoke.side_effect = Exception("LLM Timeout")
+    mock_chain = MagicMock()
+    mock_chain.invoke.side_effect = Exception("LLM Timeout")
+    mock_structured_llm.__ror__ = MagicMock(return_value=mock_chain)
 
     state: GraphState = {
         "farm_dict": {"land_size_acres": 5, "soil_type": "Clay", "district": "Test", "state": "Test", "water_source": "Rain"},

@@ -1,172 +1,159 @@
-from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required
-from beanie import PydanticObjectId
-
-from app.security import (
-    ai_rate_limit,
-    sanitize_user_input,
-    validate_language,
-    validate_advisory_output,
-)
-from app.models.documents import Farm, Advisory, AdvisoryReport
-
-advisory_bp = Blueprint("advisory", __name__)
+import pytest
+from unittest.mock import patch, MagicMock, AsyncMock
 
 
-@advisory_bp.route("/generate", methods=["POST"])
-@ai_rate_limit(max_per_minute=3)
-@jwt_required()
-async def generate():
-    data     = request.get_json(force=True, silent=True) or {}
-    farm_id  = data.get("farm_id", "")
-    language = data.get("language", "English")
-
-    language, lang_err = validate_language(language)
-
-    try:
-        farm = await Farm.get(PydanticObjectId(farm_id))
-    except Exception:
-        return jsonify({"error": "Invalid farm ID format"}), 400
-
-    if not farm:
-        return jsonify({"error": "Farm not found"}), 404
-
-    farm_dict = {
-        "id"              : str(farm.id),
-        "latitude"        : farm.latitude,
-        "longitude"       : farm.longitude,
-        "district"        : farm.district,
-        "state"           : farm.state,
-        "soil_type"       : farm.soil_type,
-        "soil_card_number": farm.soil_health_card_no,
-        "land_size_acres" : farm.land_size_acres,
-        "water_source"    : farm.water_source,
-    }
-
-    from app.agents.graph import farm_graph
-    
-    input_state = {
-        "farm_dict": farm_dict,
-        "language": language,
-        "request_type": "advisory",
-        "messages": [],
-        "current_message": ""
-    }
-    
-    output_state = farm_graph.invoke(input_state)
-    raw_result = output_state.get("advisory_result", {})
-
-    sanitized_result, warnings = validate_advisory_output(raw_result)
-    if warnings:
-        current_app.logger.warning(f"Advisory output warnings for farm {farm_id}: {warnings}")
-
-    report = AdvisoryReport(
-        farm_id=farm_id,
-        result=sanitized_result,
-        warnings=warnings,
-        language=language
-    )
-    await report.insert()
-
-    advisory = Advisory(
-        farm_id=farm_id,
-        season=sanitized_result.get("season"),
-        report_id=str(report.id)
-    )
-    await advisory.insert()
-
-    return jsonify({
-        "advisory_id" : str(advisory.id),
-        "season"      : sanitized_result.get("season"),
-        "full_advisory": sanitized_result
-    }), 200
+@pytest.fixture
+def client():
+    from app import create_app
+    app = create_app()
+    app.config["TESTING"] = True
+    with app.test_client() as c:
+        yield c
 
 
-@advisory_bp.route("/history/<farm_id>", methods=["GET"])
-@jwt_required()
-async def history(farm_id):
-    try:
-        # Verify valid ObjectId format before search
-        PydanticObjectId(farm_id)
-    except Exception:
-        return jsonify({"error": "Invalid farm ID format"}), 400
-
-    # Beanie naturally allows .sort("-created_at")
-    advisories = await Advisory.find(Advisory.farm_id == farm_id).sort("-created_at").to_list()
-
-    result = []
-    for a in advisories:
-        result.append({
-            "id"        : str(a.id),
-            "season"    : a.season,
-            "created_at": str(a.created_at),
-        })
-
-    return jsonify(result), 200
+def auth_headers():
+    from flask_jwt_extended import create_access_token
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        token = create_access_token(identity="test_user_id")
+    return {"Authorization": f"Bearer {token}"}
 
 
-@advisory_bp.route("/chat", methods=["POST"])
-@ai_rate_limit(max_per_minute=15)
-@jwt_required()
-async def chat():
-    data    = request.get_json(force=True, silent=True) or {}
-    farm_id = data.get("farm_id", "")
-    message = data.get("message", "")
-    language = data.get("language", "English")
-    history = data.get("history", [])
+# ── /advisory/generate ────────────────────────────────────────────────────────
 
-    language, _ = validate_language(language)
+@patch('app.routes.advisory.Farm')
+@patch('app.routes.advisory.farm_graph', create=True)
+def test_generate_advisory_invalid_farm_id(mock_graph, mock_farm, client):
+    headers = auth_headers()
+    resp = client.post("/advisory/generate",
+                       json={"farm_id": "bad-id", "language": "English"},
+                       headers=headers)
+    assert resp.status_code == 400
+    assert b"Invalid farm ID" in resp.data
 
-    message, input_err = sanitize_user_input(message, max_length=500)
-    if input_err:
-        return jsonify({"error": input_err}), 400
 
-    if not farm_id:
-        return jsonify({"error": "Missing farm_id"}), 400
+@patch('app.routes.advisory.Farm')
+def test_generate_advisory_farm_not_found(mock_farm_cls, client):
+    mock_farm_cls.get = AsyncMock(return_value=None)
+    headers = auth_headers()
+    resp = client.post("/advisory/generate",
+                       json={"farm_id": "6640a1b2c3d4e5f6a7b8c9d0", "language": "English"},
+                       headers=headers)
+    assert resp.status_code == 404
+    assert b"Farm not found" in resp.data
 
-    safe_history = []
-    for entry in history[:20]:
-        role    = entry.get("role", "")
-        content = entry.get("content", "")
-        if role not in ("user", "ai"):
-            continue
-        clean_content, _ = sanitize_user_input(str(content), max_length=1000)
-        safe_history.append({"role": role, "content": clean_content})
 
-    try:
-        farm = await Farm.get(PydanticObjectId(farm_id))
-    except Exception:
-        return jsonify({"error": "Invalid farm ID format"}), 400
+@patch('app.routes.advisory.Advisory')
+@patch('app.routes.advisory.AdvisoryReport')
+@patch('app.routes.advisory.validate_advisory_output')
+@patch('app.routes.advisory.farm_graph')
+@patch('app.routes.advisory.Farm')
+def test_generate_advisory_success(mock_farm_cls, mock_graph, mock_validate,
+                                    mock_report_cls, mock_advisory_cls, client):
+    mock_farm = MagicMock()
+    mock_farm.id = "6640a1b2c3d4e5f6a7b8c9d0"
+    mock_farm.latitude = 17.0
+    mock_farm.longitude = 78.0
+    mock_farm.district = "Hyderabad"
+    mock_farm.state = "Telangana"
+    mock_farm.soil_type = "Clay"
+    mock_farm.soil_health_card_no = "123"
+    mock_farm.land_size_acres = 5.0
+    mock_farm.water_source = "Borewell"
+    mock_farm_cls.get = AsyncMock(return_value=mock_farm)
 
-    if not farm:
-        return jsonify({"error": "Farm not found"}), 404
+    mock_graph.invoke.return_value = {"advisory_result": {"season": "Kharif", "recommended_crop": "Rice"}}
+    mock_validate.return_value = ({"season": "Kharif", "recommended_crop": "Rice"}, [])
 
-    farm_dict = {
-        "land_size_acres": farm.land_size_acres,
-        "soil_type"      : farm.soil_type,
-        "district"       : farm.district,
-        "state"          : farm.state,
-        "water_source"   : farm.water_source,
-    }
+    mock_report_instance = MagicMock()
+    mock_report_instance.id = "report123"
+    mock_report_instance.insert = AsyncMock()
+    mock_report_cls.return_value = mock_report_instance
 
-    try:
-        from app.agents.graph import farm_graph
-        input_state = {
-            "farm_dict": farm_dict,
-            "language": language,
-            "request_type": "chat",
-            "messages": safe_history,
-            "current_message": message
-        }
-        
-        output_state = farm_graph.invoke(input_state)
-        reply = output_state.get("chat_reply", "Timeout connecting to knowledge base.")
+    mock_advisory_instance = MagicMock()
+    mock_advisory_instance.id = "advisory123"
+    mock_advisory_instance.insert = AsyncMock()
+    mock_advisory_cls.return_value = mock_advisory_instance
 
-        import re
-        reply = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", str(reply))
+    headers = auth_headers()
+    resp = client.post("/advisory/generate",
+                       json={"farm_id": "6640a1b2c3d4e5f6a7b8c9d0", "language": "English"},
+                       headers=headers)
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["season"] == "Kharif"
 
-        return jsonify({"reply": reply}), 200
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+
+# ── /advisory/history ─────────────────────────────────────────────────────────
+
+def test_advisory_history_invalid_id(client):
+    headers = auth_headers()
+    resp = client.get("/advisory/history/bad-id", headers=headers)
+    assert resp.status_code == 400
+    assert b"Invalid farm ID" in resp.data
+
+
+@patch('app.routes.advisory.Advisory')
+def test_advisory_history_success(mock_advisory_cls, client):
+    mock_advisory = MagicMock()
+    mock_advisory.id = "adv1"
+    mock_advisory.season = "Kharif"
+    mock_advisory.created_at = "2024-01-01"
+
+    mock_query = MagicMock()
+    mock_query.sort.return_value.to_list = AsyncMock(return_value=[mock_advisory])
+    mock_advisory_cls.find.return_value = mock_query
+
+    headers = auth_headers()
+    resp = client.get("/advisory/history/6640a1b2c3d4e5f6a7b8c9d0", headers=headers)
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert len(data) == 1
+    assert data[0]["season"] == "Kharif"
+
+
+# ── /advisory/chat ────────────────────────────────────────────────────────────
+
+def test_advisory_chat_missing_farm_id(client):
+    headers = auth_headers()
+    resp = client.post("/advisory/chat",
+                       json={"message": "Should I water?", "language": "English"},
+                       headers=headers)
+    assert resp.status_code == 400
+    assert b"Missing farm_id" in resp.data
+
+
+@patch('app.routes.advisory.Farm')
+def test_advisory_chat_invalid_farm_id(mock_farm_cls, client):
+    headers = auth_headers()
+    resp = client.post("/advisory/chat",
+                       json={"farm_id": "bad-id", "message": "Hello", "language": "English"},
+                       headers=headers)
+    assert resp.status_code == 400
+
+
+@patch('app.routes.advisory.farm_graph')
+@patch('app.routes.advisory.Farm')
+def test_advisory_chat_success(mock_farm_cls, mock_graph, client):
+    mock_farm = MagicMock()
+    mock_farm.land_size_acres = 5.0
+    mock_farm.soil_type = "Clay"
+    mock_farm.district = "Hyderabad"
+    mock_farm.state = "Telangana"
+    mock_farm.water_source = "Borewell"
+    mock_farm_cls.get = AsyncMock(return_value=mock_farm)
+
+    mock_graph.invoke.return_value = {"chat_reply": "Water your crops regularly."}
+
+    headers = auth_headers()
+    resp = client.post("/advisory/chat",
+                       json={
+                           "farm_id": "6640a1b2c3d4e5f6a7b8c9d0",
+                           "message": "Should I water?",
+                           "language": "English",
+                           "history": [{"role": "user", "content": "Hello"}]
+                       },
+                       headers=headers)
+    assert resp.status_code == 200
+    assert b"Water" in resp.data
