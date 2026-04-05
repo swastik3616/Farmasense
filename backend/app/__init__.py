@@ -14,7 +14,6 @@ def create_app():
 
     # Initialize Firebase Admin SDK
     if not firebase_admin._apps:
-        # Assuming the backend directory is the root
         cred_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "firebase-key.json")
         try:
             cred = credentials.Certificate(cred_path)
@@ -24,10 +23,11 @@ def create_app():
 
     jwt.init_app(app)
     CORS(app)
-    # Initialize LangChain Global Caching (if set up)
+
     from app.agents.cache import init_semantic_cache
     init_semantic_cache()
-    
+
+    # ✅ Use app context startup instead of before_request for DB init
     @app.before_request
     async def initialize_database():
         if not getattr(app, "db_initialized", False):

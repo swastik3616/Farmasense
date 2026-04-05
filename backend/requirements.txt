@@ -26,7 +26,8 @@ apscheduler==3.10.4
 
 Pillow>=10.4.0
 
-gunicorn==21.2.0
+uvicorn>=0.29.0
+asgiref>=3.7.0
 celery~=5.3.6
 tenacity~=8.5.0
 firebase-admin~=6.5.0
