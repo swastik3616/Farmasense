@@ -1,7 +1,11 @@
 from app import create_app
 import os
 
-app = create_app()
+flask_app = create_app()
+
+# Wrap Flask WSGI app as ASGI for uvicorn
+from asgiref.wsgi import WsgiToAsgi
+app = WsgiToAsgi(flask_app)
 
 if __name__ == "__main__":
     import uvicorn
