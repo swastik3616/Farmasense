@@ -8,12 +8,6 @@ from app.agents.schemas import AdvisoryReport
 
 @patch('app.agents.nodes.advisory.get_llm')
 def test_generate_advisory_node_success(mock_get_llm):
-    """Test successful advisory generation with mocked LLM."""
-    mock_llm = MagicMock()
-    mock_structured_llm = MagicMock()
-    mock_get_llm.return_value = mock_llm
-    mock_llm.with_structured_output.return_value = mock_structured_llm
-
     mock_report = AdvisoryReport(
         season="Rabi",
         recommended_crop="Wheat",
@@ -25,55 +19,57 @@ def test_generate_advisory_node_success(mock_get_llm):
         final_advisory="Test advice"
     )
 
-    mock_chain = MagicMock()
-    mock_chain.invoke.return_value = mock_report
-    mock_structured_llm.__ror__ = MagicMock(return_value=mock_chain)
+    # Patch the entire chain at the prompt level - before | operator
+    with patch('app.agents.nodes.advisory.ChatPromptTemplate') as mock_prompt_cls:
+        mock_prompt = MagicMock()
+        mock_prompt_cls.from_messages.return_value = mock_prompt
 
-    state: GraphState = {
-        "farm_dict": {"land_size_acres": 5, "soil_type": "Clay", "district": "Test", "state": "Test", "water_source": "Rain"},
-        "language": "English",
-        "request_type": "advisory",
-        "messages": [],
-        "current_message": ""
-    }
+        mock_chain = MagicMock()
+        mock_chain.invoke.return_value = mock_report
+        mock_prompt.__or__ = MagicMock(return_value=mock_chain)  # prompt | structured_llm
 
-    result = generate_advisory_node(state)
+        state: GraphState = {
+            "farm_dict": {"land_size_acres": 5, "soil_type": "Clay", "district": "Test", "state": "Test", "water_source": "Rain"},
+            "language": "English",
+            "request_type": "advisory",
+            "messages": [],
+            "current_message": ""
+        }
 
-    assert "advisory_result" in result
-    assert result["advisory_result"]["recommended_crop"] == "Wheat"
-    assert result["advisory_result"]["confidence_score"] == 0.9
+        result = generate_advisory_node(state)
+
+        assert "advisory_result" in result
+        assert result["advisory_result"]["recommended_crop"] == "Wheat"
+        assert result["advisory_result"]["confidence_score"] == 0.9
 
 
 @patch('app.agents.nodes.advisory.get_llm')
 def test_generate_advisory_node_fallback(mock_get_llm):
-    """Test advisory node fallback when LLM fails."""
-    mock_llm = MagicMock()
-    mock_structured_llm = MagicMock()
-    mock_get_llm.return_value = mock_llm
-    mock_llm.with_structured_output.return_value = mock_structured_llm
+    with patch('app.agents.nodes.advisory.ChatPromptTemplate') as mock_prompt_cls:
+        mock_prompt = MagicMock()
+        mock_prompt_cls.from_messages.return_value = mock_prompt
 
-    mock_chain = MagicMock()
-    mock_chain.invoke.side_effect = Exception("LLM Timeout")
-    mock_structured_llm.__ror__ = MagicMock(return_value=mock_chain)
+        mock_chain = MagicMock()
+        mock_chain.invoke.side_effect = Exception("LLM Timeout")
+        mock_prompt.__or__ = MagicMock(return_value=mock_chain)
 
-    state: GraphState = {
-        "farm_dict": {"land_size_acres": 5, "soil_type": "Clay", "district": "Test", "state": "Test", "water_source": "Rain"},
-        "language": "English",
-        "request_type": "advisory",
-        "messages": [],
-        "current_message": ""
-    }
+        state: GraphState = {
+            "farm_dict": {"land_size_acres": 5, "soil_type": "Clay", "district": "Test", "state": "Test", "water_source": "Rain"},
+            "language": "English",
+            "request_type": "advisory",
+            "messages": [],
+            "current_message": ""
+        }
 
-    result = generate_advisory_node(state)
+        result = generate_advisory_node(state)
 
-    assert "advisory_result" in result
-    assert result["advisory_result"]["recommended_crop"] == "Service Degraded"
-    assert "LLM Timeout" in result["advisory_result"]["final_advisory"]
+        assert "advisory_result" in result
+        assert result["advisory_result"]["recommended_crop"] == "Service Degraded"
+        assert "LLM Timeout" in result["advisory_result"]["final_advisory"]
 
 
 @patch('app.agents.nodes.chat.get_chat_llm')
 def test_chat_node_success(mock_get_chat_llm):
-    """Test successful chat response."""
     mock_llm = MagicMock()
     mock_get_chat_llm.return_value = mock_llm
 
