@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { sendOtp, verifyOtp } from '../../services/api';
+import { sendOtp, verifyOtp, verifyFirebase } from '../../services/api';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { auth } from '../../firebase';
 
 function FarmerLogin() {
   const [mobile, setMobile] = useState('');
@@ -9,9 +11,18 @@ function FarmerLogin() {
   const [step, setStep] = useState(1); // 1 = mobile, 2 = otp
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [confirmationResult, setConfirmationResult] = useState(null);
   
   const { loginFarmer } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        'size': 'invisible'
+      });
+    }
+  }, []);
 
   const handleSendOtp = async (e) => {
     e.preventDefault();
@@ -22,10 +33,14 @@ function FarmerLogin() {
     setLoading(true);
     setError(null);
     try {
-      await sendOtp(mobile);
+      const formattedMobile = mobile.startsWith('+') ? mobile : `+91${mobile}`;
+      const appVerifier = window.recaptchaVerifier;
+      const confirmation = await signInWithPhoneNumber(auth, formattedMobile, appVerifier);
+      setConfirmationResult(confirmation);
       setStep(2);
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to send OTP. Please try again.");
+      console.error(err);
+      setError(err.message || "Failed to send OTP. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -36,13 +51,17 @@ function FarmerLogin() {
     setLoading(true);
     setError(null);
     try {
-      const res = await verifyOtp(mobile, otp);
-      // Simulate generic name if backend doesn't provide
+      const result = await confirmationResult.confirm(otp);
+      const idToken = await result.user.getIdToken();
+      
+      const res = await verifyFirebase(idToken, "Farmer User");
       const { token, name, user_id } = res.data;
+      
       loginFarmer(token, name || "Farmer User", user_id);
       navigate("/farmer/dashboard");
     } catch (err) {
-      setError(err.response?.data?.error || "Invalid OTP. Please try again.");
+      console.error(err);
+      setError(err.response?.data?.error || err.message || "Invalid OTP. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -100,6 +119,7 @@ function FarmerLogin() {
             </button>
           </form>
         )}
+        <div id="recaptcha-container"></div>
       </div>
     </div>
   );

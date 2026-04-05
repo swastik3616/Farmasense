@@ -29,6 +29,7 @@ export const getAllAlerts = () => API.get("/admin/alerts");
 // Farmer Auth
 export const sendOtp = (mobile) => API.post("/auth/send-otp", { mobile_number: mobile });
 export const verifyOtp = (mobile, otp) => API.post("/auth/verify-otp", { mobile_number: mobile, otp });
+export const verifyFirebase = (idToken, name) => API.post("/auth/verify-firebase", { id_token: idToken, name });
 
 // Farm
 export const createFarm = (data) => API.post("/farm/create", data);

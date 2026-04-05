@@ -3,12 +3,24 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 
 from config import Config
-
+import firebase_admin
+from firebase_admin import credentials
+import os
 jwt = JWTManager()
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    # Initialize Firebase Admin SDK
+    if not firebase_admin._apps:
+        # Assuming the backend directory is the root
+        cred_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "firebase-key.json")
+        try:
+            cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred)
+        except Exception as e:
+            print(f"Warning: Failed to initialize Firebase: {e}")
 
     jwt.init_app(app)
     CORS(app)
